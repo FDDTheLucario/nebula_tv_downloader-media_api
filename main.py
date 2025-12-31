@@ -4,6 +4,7 @@ from NebulaAPI.Authorization import NebulaUserAuthorzation
 from NebulaAPI.VideoFeedFetcher import get_all_channels_slugs_from_video_feed
 from NebulaAPI.ChannelVideos import get_channel_video_content
 from NebulaAPI.StreamingInformation import get_streaming_information_by_episode
+from models.nebula.VideoAttributes import VideoNebulaAttributes
 from utils.MetadataFilesManager import (
     create_channel_subdirectory_and_store_metadata_information, create_nfo_for_video, create_nfo_for_channel
 )
@@ -62,7 +63,7 @@ def main() -> None:
         )
 
         create_nfo_for_channel(
-            channelData=channelData,
+            channelData=channelData.details,
             channelDirectory=channelDirectory
         )
 
@@ -88,7 +89,12 @@ def main() -> None:
                 channel,
             )
             publicationYear = datetime.fromisoformat(episode.published_at).year
-            episodeDirectory = channelDirectory / f"Season {publicationYear}" / episode.slug
+            seasonDirectoryForChannel = (
+                "Specials" if VideoNebulaAttributes.IS_NEBULA_ORIGINAL in episode.attributes else
+                f"Season {publicationYear}"
+            )
+
+            episodeDirectory = channelDirectory / seasonDirectoryForChannel / episode.slug
             episodeDirectory.mkdir(parents=True, exist_ok=True)
             download_thumbnail(
                 episode.images.thumbnail.src, episodeDirectory / f"{episode.slug}-thumb.jpg"
@@ -97,10 +103,14 @@ def main() -> None:
                 videoSlug=episode.slug,
                 authorizationHeader=NEBULA_AUTH.get_authorization_header(full=True),
             )
-            download_video(
-                url=streamingInformation.manifest,
-                outputFile=episodeDirectory / f"{episode.slug}",
-            )
+
+            episodeFilePath = episodeDirectory / f"{episode.slug}"
+            if not episodeFilePath.exists():
+                download_video(
+                    url=streamingInformation.manifest,
+                    outputFile=episodeFilePath,
+                )
+
             download_subtitles(
                 subtitiles=streamingInformation.subtitles,
                 outputDirectory=episodeDirectory,

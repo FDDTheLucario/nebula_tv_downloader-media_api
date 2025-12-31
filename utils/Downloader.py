@@ -37,7 +37,7 @@ def download_thumbnail(
     maxResolution: tuple[int, int] | None = None,
     compressImage: bool = False,
 ) -> None:
-    with open(outputFile, "wb") as file:  # skipcq: PTC-W6004
+    with open(outputFile, "wb") as file:
         file.write(requests.get(url).content)
     if compressImage:
         img = Image.open(outputFile)
@@ -62,6 +62,8 @@ def download_subtitles(
             .replace("_vtt", ".vtt")
         )
         outputFilename: Path = outputDirectory / outputName
+        if outputFilename.exists():
+            return
         with open(outputFilename, "wb") as file:
             file.write(requests.get(subtitle.url).content)
     return

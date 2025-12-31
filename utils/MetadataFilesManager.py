@@ -45,7 +45,7 @@ def create_nfo_for_channel(channelData: NebulaChannelVideoContentDetails, channe
     channelNfoFilePath = channelDirectory / "tvshow.nfo"
     with open(channelNfoFilePath, "w") as file:
         channelDetailsDict = {
-            "plot": channelData.details.description,
-            "title": channelData.details.title
+            "plot": channelData.description,
+            "title": channelData.title
         }
         file.write(parseString(dicttoxml.dicttoxml(channelDetailsDict, attr_type=False, custom_root="channeldetails")).toprettyxml(indent="  "))
