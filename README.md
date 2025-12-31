@@ -35,11 +35,10 @@ Simple project that will parse and download *all* videos from Nebula channels (o
 
 If you can find infinite money glitch, you can just download every video on Nebula. But if you can't, you can still download all videos from a channel you like. \
 Also, having a local copy of online-videos on a streaming service is a good idea, in case the service goes down.
-
 ## How to Use
 
 1. In the cloned repository, in the `config/` directory copy example config (`config.example.ini`) to the `config.ini`, define certain values in the `config.ini` file (only `USER_API_TOKEN` is required).
-2. Install necessary dependencies for Python from the `requirements.txt`.
+2. Install necessary dependencies using the provided Pipfile.
 3. Run `main.py` (from the root of the repository).
 
 ### Getting Nebula API Token
@@ -48,6 +47,8 @@ Also, having a local copy of online-videos on a streaming service is a good idea
 2. Reload any page with inspector open.
 3. Find a request made to `/api/v1/authorization/`.
 4. Copy the value of `Authorization` header without the `Token` keyword.
+
+
 
 ### Configuration File
 

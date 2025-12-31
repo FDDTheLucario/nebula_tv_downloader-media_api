@@ -1,0 +1,17 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "==2.28.1"
+pydantic = "==1.10.2"
+yt-dlp = "==2022.10.4"
+pillow = "==9.3.0"
+luminadb = "*"
+dicttoxml = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"
