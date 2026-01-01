@@ -1,15 +1,18 @@
-from requests import get as requests_get
 import logging
 from time import sleep
+from urllib.parse import unquote
+
+from requests import get as requests_get
+
 from models.nebula.Fetched import NebulaChannelVideoContentResponseModel
 from models.urls import NEBULA_API_CONTENT_VIDEO_CHANNELS
 
 
 def get_channel_video_content(
-    channelSlug: str, authorizationHeader: str, waitAfterUnsuccessfulSeconds: int = 5
+        channelSlug: str, authorizationHeader: str, waitAfterUnsuccessfulSeconds: int = 5
 ) -> NebulaChannelVideoContentResponseModel:
     response = requests_get(
-        url=NEBULA_API_CONTENT_VIDEO_CHANNELS.format(CHANNEL_SLUG=channelSlug),
+        url=unquote(str(NEBULA_API_CONTENT_VIDEO_CHANNELS)).format(CHANNEL_SLUG=channelSlug),
         headers={
             "Authorization": authorizationHeader,
         },

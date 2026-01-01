@@ -107,7 +107,7 @@ def main() -> None:
             episodeFilePath = episodeDirectory / f"{episode.slug}"
             if not episodeFilePath.exists():
                 download_video(
-                    url=streamingInformation.manifest,
+                    url=str(streamingInformation.manifest),
                     outputFile=episodeFilePath,
                 )
 

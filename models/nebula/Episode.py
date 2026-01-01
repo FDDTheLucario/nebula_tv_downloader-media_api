@@ -24,12 +24,12 @@ class NebulaChannelVideoContentEpisodeResult(BaseModel):
     type: str
     slug: str
     title: str
-    description: str | None
-    short_description: str | None
+    description: str | None = None
+    short_description: str | None = None
     duration: NonNegativeInt
     duration_to_complete: NonNegativeInt
     published_at: str
-    episode_url: HttpUrl | None
+    episode_url: HttpUrl | None = None
     channel_id: str
     channel_slug: str
     channel_slugs: list[str]
@@ -39,6 +39,6 @@ class NebulaChannelVideoContentEpisodeResult(BaseModel):
     images: NebulaChannelVideoContentEpisodeResultImages
     attributes: list[VideoNebulaAttributes]
     share_url: str
-    channel: HttpUrl | None
-    engagement: dict | None
-    zype_id: str | None
+    channel: HttpUrl | None = None
+    engagement: dict | None = None
+    zype_id: str | None = None

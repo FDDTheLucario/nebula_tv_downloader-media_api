@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 from xml.dom.minidom import parseString
+from xml.etree.ElementTree import indent
 
 import dicttoxml
 
@@ -19,9 +20,9 @@ def create_channel_subdirectory_and_store_metadata_information(
     channelDirectory = outputDirectory / channelSlug
     channelDirectory.mkdir(parents=True, exist_ok=True)
     with open(channelDirectory / "channel.json", "w") as file:
-        json.dump(channelData.dict(), file, indent=4)
+        json.dump(channelData.model_dump(), file, indent=4, default=str)
     with open(channelDirectory / "episodes.json", "w") as file:
-        json.dump(episodesData.dict()["results"], file, indent=4)
+        json.dump(episodesData.model_dump()["results"], file, indent=4, default=str)
     return channelDirectory
 
 

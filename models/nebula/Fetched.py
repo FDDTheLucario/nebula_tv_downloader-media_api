@@ -4,8 +4,8 @@ from models.nebula.Channel import NebulaChannelVideoContentDetails
 
 
 class NebulaChannelVideoContentEpisodes(BaseModel):
-    next: HttpUrl | None
-    previous: HttpUrl | None
+    next: HttpUrl | None = None
+    previous: HttpUrl | None = None
     results: list[NebulaChannelVideoContentEpisodeResult]
 
 

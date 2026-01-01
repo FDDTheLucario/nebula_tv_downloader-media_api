@@ -9,7 +9,7 @@ class NebulaVideoContentStreamSubtitles(BaseModel):
 
 class NebulaVideoContentStreamingResponseModel(BaseModel):
     manifest: HttpUrl
-    download: HttpUrl | str | None
-    iframe: HttpUrl | None
+    download: HttpUrl | str | None = None
+    iframe: HttpUrl | None = None
     bif: dict
     subtitles: list[NebulaVideoContentStreamSubtitles]

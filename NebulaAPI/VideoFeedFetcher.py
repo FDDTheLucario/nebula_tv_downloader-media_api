@@ -1,3 +1,5 @@
+from urllib.parse import unquote
+
 from requests import get as requests_get
 import logging
 from models.urls import NEBULA_API_CONTENT_ALL_VIDEOS
@@ -10,7 +12,7 @@ def get_all_channels_slugs_from_video_feed(
     cursorTimesLimitFetchMaximum: int = 100,
 ) -> list[str]:
     response = requests_get(
-        url=NEBULA_API_CONTENT_ALL_VIDEOS.format(
+        url=unquote(str(NEBULA_API_CONTENT_ALL_VIDEOS)).format(
             CATEGORY_QUERY=f"?category={categoryFeedSelector}"
             if categoryFeedSelector is not None
             else ""

@@ -13,7 +13,7 @@ class ConfigurationNebulaAPIModel(BaseModel):
 
 
 class ConfigurationNebulaFiltersModel(BaseModel):
-    CATEGORY_SEARCH: str | None
+    CATEGORY_SEARCH: str | None = None
     INCLUDE_NEBULA_FIRST: bool = True
     INCLUDE_NEBULA_PLUS: bool = True
     INCLUDE_NEBULA_ORIGINALS: bool = True

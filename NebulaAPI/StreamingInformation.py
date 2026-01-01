@@ -1,3 +1,5 @@
+from urllib.parse import unquote
+
 from requests import get as requests_get
 import logging
 from time import sleep
@@ -6,16 +8,19 @@ from models.urls import NEBULA_API_VIDEO_STREAM_INFORMATION
 
 
 def get_streaming_information_by_episode(
-    videoSlug: str,
-    authorizationHeader: str,
-    retryAfterUnsuccessfulSeconds: int = 5,
+        videoSlug: str,
+        authorizationHeader: str,
+        retryAfterUnsuccessfulSeconds: int = 5,
 ) -> NebulaVideoContentStreamingResponseModel:
     response = requests_get(
-        url=NEBULA_API_VIDEO_STREAM_INFORMATION.format(VIDEO_SLUG=videoSlug),
-        headers={
+        url=unquote(
+            str(NEBULA_API_VIDEO_STREAM_INFORMATION)
+        ).format(VIDEO_SLUG=videoSlug)
+        , headers={
             "Authorization": authorizationHeader,
         },
     )
+
     logging.debug(
         "Received response of `%s...` with status code %s in %s seconds",
         response.content[:20],
