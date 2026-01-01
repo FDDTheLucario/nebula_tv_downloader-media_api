@@ -1,6 +1,6 @@
 import logging
 from config.Config import Config
-from NebulaAPI.Authorization import NebulaUserAuthorzation
+from NebulaAPI.Authorization import NebulaUserAuthorization
 from NebulaAPI.VideoFeedFetcher import get_all_channels_slugs_from_video_feed
 from NebulaAPI.ChannelVideos import get_channel_video_content
 from NebulaAPI.StreamingInformation import get_streaming_information_by_episode
@@ -18,9 +18,9 @@ logging.basicConfig(
 
 CONFIG = Config()
 
-NEBULA_AUTH = NebulaUserAuthorzation(
-    userToken=CONFIG.NebulaAPI.USER_API_TOKEN,
-    authorizationHeader=CONFIG.NebulaAPI.AUTHORIZATION_HEADER,
+NEBULA_AUTH = NebulaUserAuthorization(
+    user_token=CONFIG.NebulaAPI.USER_API_TOKEN,
+    authorization_header=CONFIG.NebulaAPI.AUTHORIZATION_HEADER,
 )
 
 
@@ -30,93 +30,93 @@ def main() -> None:
         logging.debug("Using channels from config: %s", channels)
     else:
         channels = get_all_channels_slugs_from_video_feed(
-            authorizationHeader=NEBULA_AUTH.get_authorization_header(full=True),
-            categoryFeedSelector=CONFIG.NebulaFilters.CATEGORY_SEARCH,
-            cursorTimesLimitFetchMaximum=1,
+            authorization_header=NEBULA_AUTH.get_authorization_header(full=True),
+            category_feed_selector=CONFIG.NebulaFilters.CATEGORY_SEARCH,
+            cursor_times_limit_fetch_maximum=1,
         )
     for channel in channels:
         logging.info("Fetching episodes for channel `%s`", channel)
-        channelData = get_channel_video_content(
-            channelSlug=channel,
-            authorizationHeader=NEBULA_AUTH.get_authorization_header(full=True),
+        channel_data = get_channel_video_content(
+            channel_slug=channel,
+            authorization_header=NEBULA_AUTH.get_authorization_header(full=True),
         )
         logging.info(
             "Found %s episodes for channel `%s`",
-            len(channelData.episodes.results),
+            len(channel_data.episodes.results),
             channel,
         )
-        filteredEpisodes = list(
+        filtered_episodes = list(
             filter_out_episodes(
-                filterSettings=CONFIG.NebulaFilters,
-                episodes=channelData.episodes.results,
+                filter_settings=CONFIG.NebulaFilters,
+                episodes=channel_data.episodes.results,
             )
         )
 
-        uniquePublicationYears = {datetime.fromisoformat(episode.published_at).year for episode in filteredEpisodes}
+        uniquePublicationYears = {datetime.fromisoformat(episode.published_at).year for episode in filtered_episodes}
 
-        logging.info("Filtered down to %s episodes", len(filteredEpisodes))
+        logging.info("Filtered down to %s episodes", len(filtered_episodes))
         channelDirectory = create_channel_subdirectory_and_store_metadata_information(
-            channelSlug=channel,
-            channelData=channelData.details,
-            episodesData=channelData.episodes,
-            outputDirectory=CONFIG.Downloader.DOWNLOAD_PATH,
+            channel_slug=channel,
+            channel_data=channel_data.details,
+            episodes_data=channel_data.episodes,
+            output_directory=CONFIG.Downloader.DOWNLOAD_PATH,
         )
 
         create_nfo_for_channel(
-            channelData=channelData.details,
-            channelDirectory=channelDirectory
+            channel_data=channel_data.details,
+            channel_directory=channelDirectory
         )
 
         download_thumbnail(
-            channelData.details.images["banner"]["src"], channelDirectory / "backdrop.jpg"
+            channel_data.details.images["banner"]["src"], channelDirectory / "backdrop.jpg"
         )
         download_thumbnail(
-            channelData.details.images["avatar"]["src"], channelDirectory / "logo.jpg"
+            channel_data.details.images["avatar"]["src"], channelDirectory / "logo.jpg"
         )
         download_thumbnail(
-            channelData.details.images["avatar"]["src"], channelDirectory / f"{channel}.jpg"
+            channel_data.details.images["avatar"]["src"], channelDirectory / f"{channel}.jpg"
         )
 
         for year in uniquePublicationYears:
-            seasonDirectoryForChannel = channelDirectory / f"Season {year}"
-            seasonDirectoryForChannel.mkdir(parents=True, exist_ok=True)
-            download_thumbnail(channelData.details.images["avatar"]["src"], channelDirectory / f"season{year}-poster.jpg" )
+            season_directory_for_channel = channelDirectory / f"Season {year}"
+            season_directory_for_channel.mkdir(parents=True, exist_ok=True)
+            download_thumbnail(channel_data.details.images["avatar"]["src"], channelDirectory / f"season{year}-poster.jpg" )
 
-        for episode in filteredEpisodes:
+        for episode in filtered_episodes:
             logging.info(
                 "Downloading episode `%s` from channel `%s`",
                 episode.slug,
                 channel,
             )
-            publicationYear = datetime.fromisoformat(episode.published_at).year
-            seasonDirectoryForChannel = (
+            publication_year = datetime.fromisoformat(episode.published_at).year
+            season_directory_for_channel = (
                 "Specials" if VideoNebulaAttributes.IS_NEBULA_ORIGINAL in episode.attributes else
-                f"Season {publicationYear}"
+                f"Season {publication_year}"
             )
 
-            episodeDirectory = channelDirectory / seasonDirectoryForChannel / episode.slug
-            episodeDirectory.mkdir(parents=True, exist_ok=True)
+            episode_directory = channelDirectory / season_directory_for_channel / episode.slug
+            episode_directory.mkdir(parents=True, exist_ok=True)
             download_thumbnail(
-                episode.images.thumbnail.src, episodeDirectory / f"{episode.slug}-thumb.jpg"
+                str(episode.images.thumbnail.src), episode_directory / f"{episode.slug}-thumb.jpg"
             )
             streamingInformation = get_streaming_information_by_episode(
-                videoSlug=episode.slug,
-                authorizationHeader=NEBULA_AUTH.get_authorization_header(full=True),
+                video_slug=episode.slug,
+                authorization_header=NEBULA_AUTH.get_authorization_header(full=True),
             )
 
-            episodeFilePath = episodeDirectory / f"{episode.slug}"
-            if not episodeFilePath.exists():
+            episode_file_path = episode_directory / f"{episode.slug}"
+            if not episode_file_path.exists():
                 download_video(
                     url=str(streamingInformation.manifest),
-                    outputFile=episodeFilePath,
+                    output_file=episode_file_path,
                 )
 
             download_subtitles(
-                subtitiles=streamingInformation.subtitles,
-                outputDirectory=episodeDirectory,
+                subtitles=streamingInformation.subtitles,
+                output_directory=episode_directory,
             )
             create_nfo_for_video(
-               episode, episodeDirectory
+               episode, episode_directory
             )
     return
 

@@ -8,16 +8,15 @@ from models.urls import NEBULA_API_VIDEO_STREAM_INFORMATION
 
 
 def get_streaming_information_by_episode(
-        videoSlug: str,
-        authorizationHeader: str,
-        retryAfterUnsuccessfulSeconds: int = 5,
+        video_slug: str,
+        authorization_header: str,
+        retry_after_unsuccessful_seconds: int = 5,
 ) -> NebulaVideoContentStreamingResponseModel:
     response = requests_get(
-        url=unquote(
+        url = unquote(
             str(NEBULA_API_VIDEO_STREAM_INFORMATION)
-        ).format(VIDEO_SLUG=videoSlug)
-        , headers={
-            "Authorization": authorizationHeader,
+        ).format(VIDEO_SLUG = video_slug), headers= {
+            "Authorization": authorization_header,
         },
     )
 
@@ -32,27 +31,27 @@ def get_streaming_information_by_episode(
     elif response.status_code == 403:
         logging.info(
             "The authorization token is invalid (got restricted), retrying in %s seconds... (status code: %s) (you should probably buy a new subscription or contact support)",
-            retryAfterUnsuccessfulSeconds,
+            retry_after_unsuccessful_seconds,
             response.status_code,
         )
-        sleep(retryAfterUnsuccessfulSeconds)
+        sleep(retry_after_unsuccessful_seconds)
         return get_streaming_information_by_episode(
-            videoSlug=videoSlug,
-            authorizationHeader=authorizationHeader,
-            retryAfterUnsuccessfulSeconds=10,
+            video_slug=video_slug,
+            authorization_header=authorization_header,
+            retry_after_unsuccessful_seconds=10,
         )
     elif response.status_code == 429:
         logging.warning(
             "Throttled by Nebula API while getting streaming information for `%s`, waiting for %s seconds...",
-            videoSlug,
-            retryAfterUnsuccessfulSeconds,
+            video_slug,
+            retry_after_unsuccessful_seconds,
         )
-        sleep(retryAfterUnsuccessfulSeconds)
+        sleep(retry_after_unsuccessful_seconds)
         return get_streaming_information_by_episode(
-            videoSlug=videoSlug,
-            authorizationHeader=authorizationHeader,
-            retryAfterUnsuccessfulSeconds=retryAfterUnsuccessfulSeconds + 1,
+            video_slug=video_slug,
+            authorization_header=authorization_header,
+            retry_after_unsuccessful_seconds=retry_after_unsuccessful_seconds + 1,
         )
     raise Exception(
-        f"Failed to get video streaming info for `{videoSlug}` for an unknown reason: `{response.content[:32]}...` with status code {response.status_code}"
+        f"Failed to get video streaming info for `{video_slug}` for an unknown reason: `{response.content[:32]}...` with status code {response.status_code}"
     )

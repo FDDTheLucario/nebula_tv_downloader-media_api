@@ -4,14 +4,14 @@ from models.urls import NEBULA_USERAPI_AUTHORIZATION
 from models.nebula.UserAuthorization import NebulaUserAPIAuthorizationTokenResponseModel
 
 
-class NebulaUserAuthorzation:
-    def __init__(self, userToken: str, authorizationHeader: str | None) -> None:
-        self.__USER_TOKEN = userToken
-        self.__AUTHORIZATION_HEADER = authorizationHeader
-        self.__fetch_authrizaton_token()
+class NebulaUserAuthorization:
+    def __init__(self, user_token: str, authorization_header: str | None) -> None:
+        self.__USER_TOKEN = user_token
+        self.__AUTHORIZATION_HEADER = authorization_header
+        self.__fetch_authorization_token()
         self.__post_init__()
 
-    def __fetch_authrizaton_token(self) -> None:
+    def __fetch_authorization_token(self) -> None:
         logging.debug(
             "Fetching authorization token with user token `%s...`",
             self.__USER_TOKEN[:5],
@@ -55,7 +55,11 @@ class NebulaUserAuthorzation:
         return self.__USER_TOKEN
 
     def __repr__(self) -> str:
-        return f"NebulaUserAuthorzation(userToken={self.__USER_TOKEN}, authorizationHeader={self.__AUTHORIZATION_HEADER})"
+        return f"NebulaUserAuthorization(user_token={self.__USER_TOKEN}, authorization_header={self.__AUTHORIZATION_HEADER})"
 
     def __str__(self) -> str:
         return self.__repr__()
+    def __eq__(self, o: object) -> bool:
+        if not isinstance(o, NebulaUserAuthorization):
+            return False
+        return self.__USER_TOKEN == o.get_user_token() and self.__AUTHORIZATION_HEADER == o.get_authorization_header()

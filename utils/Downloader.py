@@ -8,23 +8,23 @@ from urllib.parse import urlparse
 
 def download_video(
     url: str,
-    outputFile: Path,
+    output_file: Path,
     quiet: bool = False,
-    downloadFormat: str = "bestvideo+bestaudio/best",
-    maxFileSize: int | None = None,
-    subtitleLanguages: list[str] = ["en", "de", "ru"],  # skipcq: PYL-W0102
+    download_format: str = "bestvideo+bestaudio/best",
+    max_file_size: int | None = None,
+    subtitle_languages: list[str] = ["en", "de", "ru"],  # skipcq: PYL-W0102
 ) -> None:
     ydl_opts = {
-        "outtmpl": outputFile.__str__() + ".%(ext)s",
-        "format": downloadFormat,
+        "outtmpl": output_file.__str__() + ".%(ext)s",
+        "format": download_format,
         "quiet": quiet,
         "embedthumbnail": True,
         "embedsubtitle": True,
         "embeddescription": True,
         "embedchapters": True,
-        "subtitleslangs": subtitleLanguages,
+        "subtitleslangs": subtitle_languages,
         "convertthumbnails": "jpg",
-        "max_filesize": maxFileSize,
+        "max_filesize": max_file_size,
     }
     with YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
@@ -33,26 +33,26 @@ def download_video(
 
 def download_thumbnail(
     url: str,
-    outputFile: Path,
-    maxResolution: tuple[int, int] | None = None,
-    compressImage: bool = False,
+    output_file: Path,
+    max_resolution: tuple[int, int] | None = None,
+    compress_image: bool = False,
 ) -> None:
-    with open(outputFile, "wb") as file:
+    with open(output_file, "wb") as file:
         file.write(requests.get(url).content)
-    if compressImage:
-        img = Image.open(outputFile)
-        if maxResolution is not None:
-            img.thumbnail(maxResolution, Image.Resampling.LANCZOS)
-        img.save(outputFile, format="JPEG", quality=85, optimize=True, progressive=True)
+    if compress_image:
+        img = Image.open(output_file)
+        if max_resolution is not None:
+            img.thumbnail(max_resolution, Image.Resampling.LANCZOS)
+        img.save(output_file, format="JPEG", quality=85, optimize=True, progressive=True)
     return
 
 
 def download_subtitles(
-    subtitiles: list[NebulaVideoContentStreamSubtitles],
-    outputDirectory: Path,
+    subtitles: list[NebulaVideoContentStreamSubtitles],
+    output_directory: Path,
 ) -> None:
-    for subtitle in subtitiles:
-        outputName: str = (
+    for subtitle in subtitles:
+        output_name: str = (
             subtitle.language_code
             + "-"
             + urlparse(str(subtitle.url))
@@ -61,9 +61,9 @@ def download_subtitles(
             .replace(".", "_")
             .replace("_vtt", ".vtt")
         )
-        outputFilename: Path = outputDirectory / outputName
-        if outputFilename.exists():
+        output_filename: Path = output_directory / output_name
+        if output_filename.exists():
             return
-        with open(outputFilename, "wb") as file:
+        with open(output_filename, "wb") as file:
             file.write(requests.get(subtitle.url).content)
     return

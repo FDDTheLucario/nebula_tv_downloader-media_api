@@ -15,45 +15,45 @@ class QuotedConfigParser(ConfigParser):
 
 
 class Config:
-    def __init__(self, configPath: Path = Path("config/config.ini")) -> None:
-        configOriginal = QuotedConfigParser()
-        configOriginal.read(configPath)
+    def __init__(self, config_path: Path = Path("config/config.ini")) -> None:
+        config_original = QuotedConfigParser()
+        config_original.read(config_path)
         self.__CONFIG = ConfigurationModel(
             NebulaAPI=ConfigurationNebulaAPIModel(
-                USER_API_TOKEN=configOriginal.get("NebulaAPI", "USER_API_TOKEN"),
-                AUTHORIZATION_HEADER=configOriginal.get(
+                USER_API_TOKEN=config_original.get("NebulaAPI", "USER_API_TOKEN"),
+                AUTHORIZATION_HEADER=config_original.get(
                     "NebulaAPI", "AUTHORIZATION_HEADER"
                 ),
-                USER_AGENT=configOriginal.get("NebulaAPI", "USER_AGENT")
-                if configOriginal.get("NebulaAPI", "USER_AGENT")
+                USER_AGENT=config_original.get("NebulaAPI", "USER_AGENT")
+                if config_original.get("NebulaAPI", "USER_AGENT")
                 else None,
             ),
             NebulaFilters=ConfigurationNebulaFiltersModel(
                 CATEGORY_SEARCH=str(
-                    configOriginal.get("NebulaFilters", "CATEGORY_SEARCH")
+                    config_original.get("NebulaFilters", "CATEGORY_SEARCH")
                 )
-                if not configOriginal.get("NebulaFilters", "CATEGORY_SEARCH") == "false"
+                if not config_original.get("NebulaFilters", "CATEGORY_SEARCH") == "false"
                 else None,
-                INCLUDE_NEBULA_FIRST=configOriginal.getboolean(
+                INCLUDE_NEBULA_FIRST=config_original.getboolean(
                     "NebulaFilters", "INCLUDE_NEBULA_FIRST"
                 ),
-                INCLUDE_NEBULA_PLUS=configOriginal.getboolean(
+                INCLUDE_NEBULA_PLUS=config_original.getboolean(
                     "NebulaFilters", "INCLUDE_NEBULA_PLUS"
                 ),
-                INCLUDE_NEBULA_ORIGINALS=configOriginal.getboolean(
+                INCLUDE_NEBULA_ORIGINALS=config_original.getboolean(
                     "NebulaFilters", "INCLUDE_NEBULA_ORIGINALS"
                 ),
-                INCLUDE_REGULAR_VIDEOS=configOriginal.getboolean(
+                INCLUDE_REGULAR_VIDEOS=config_original.getboolean(
                     "NebulaFilters", "INCLUDE_REGULAR_VIDEOS"
                 ),
-                CHANNELS_TO_PARSE=configOriginal.get(
+                CHANNELS_TO_PARSE=config_original.get(
                     "NebulaFilters", "CHANNELS_TO_PARSE"
                 ).split(",")
-                if configOriginal["NebulaFilters"]["CHANNELS_TO_PARSE"]
+                if config_original["NebulaFilters"]["CHANNELS_TO_PARSE"]
                 else None,
             ),
             Downloader=ConfigurationDownloaderModel(
-                DOWNLOAD_PATH=configOriginal.get("Downloader", "DOWNLOAD_PATH"),
+                DOWNLOAD_PATH=config_original.get("Downloader", "DOWNLOAD_PATH"),
             ),
         )
 

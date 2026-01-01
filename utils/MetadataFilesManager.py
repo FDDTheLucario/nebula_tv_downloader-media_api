@@ -12,41 +12,41 @@ from models.nebula.Fetched import NebulaChannelVideoContentEpisodes
 
 
 def create_channel_subdirectory_and_store_metadata_information(
-    channelSlug: str,
-    channelData: NebulaChannelVideoContentDetails,
-    episodesData: NebulaChannelVideoContentEpisodes,
-    outputDirectory: Path,
+    channel_slug: str,
+    channel_data: NebulaChannelVideoContentDetails,
+    episodes_data: NebulaChannelVideoContentEpisodes,
+    output_directory: Path,
 ) -> Path:
-    channelDirectory = outputDirectory / channelSlug
-    channelDirectory.mkdir(parents=True, exist_ok=True)
-    with open(channelDirectory / "channel.json", "w") as file:
-        json.dump(channelData.model_dump(), file, indent=4, default=str)
-    with open(channelDirectory / "episodes.json", "w") as file:
-        json.dump(episodesData.model_dump()["results"], file, indent=4, default=str)
-    return channelDirectory
+    channel_directory = output_directory / channel_slug
+    channel_directory.mkdir(parents=True, exist_ok=True)
+    with open(channel_directory / "channel.json", "w") as file:
+        json.dump(channel_data.model_dump(), file, indent=4, default=str)
+    with open(channel_directory / "episodes.json", "w") as file:
+        json.dump(episodes_data.model_dump()["results"], file, indent=4, default=str)
+    return channel_directory
 
 
 def create_nfo_for_video(episode: NebulaChannelVideoContentEpisodeResult, episodeDirectory: Path) -> Path:
-    videoNfoFilePath = episodeDirectory / f"{episode.slug}.nfo"
-    episodeDate = datetime.fromisoformat(episode.published_at)
-    print(videoNfoFilePath)
-    with open(videoNfoFilePath, "w") as file:
-        episodeDetailsDict = {
+    video_nfo_file_path = episodeDirectory / f"{episode.slug}.nfo"
+    episode_date = datetime.fromisoformat(episode.published_at)
+    print(video_nfo_file_path)
+    with open(video_nfo_file_path, "w") as file:
+        episode_details_dict = {
             "title": episode.title,
             "showtitle": episode.channel_title,
             "plot": episode.description,
             "unique_id": episode.id,
-            "premiered": episodeDate.strftime("%Y-%m-%d"),
-            "season": episodeDate.year
+            "premiered": episode_date.strftime("%Y-%m-%d"),
+            "season": episode_date.year
         }
-        file.write(parseString(dicttoxml.dicttoxml(episodeDetailsDict, attr_type=False, custom_root="episodedetails")).toprettyxml(indent="  "))
+        file.write(parseString(dicttoxml.dicttoxml(episode_details_dict, attr_type=False, custom_root="episodedetails")).toprettyxml(indent="  "))
 
 
-def create_nfo_for_channel(channelData: NebulaChannelVideoContentDetails, channelDirectory: Path) -> Path:
-    channelNfoFilePath = channelDirectory / "tvshow.nfo"
-    with open(channelNfoFilePath, "w") as file:
-        channelDetailsDict = {
-            "plot": channelData.description,
-            "title": channelData.title
+def create_nfo_for_channel(channel_data: NebulaChannelVideoContentDetails, channel_directory: Path) -> Path:
+    channel_nfo_file_path = channel_directory / "tvshow.nfo"
+    with open(channel_nfo_file_path, "w") as file:
+        channel_details_dict = {
+            "plot": channel_data.description,
+            "title": channel_data.title
         }
-        file.write(parseString(dicttoxml.dicttoxml(channelDetailsDict, attr_type=False, custom_root="channeldetails")).toprettyxml(indent="  "))
+        file.write(parseString(dicttoxml.dicttoxml(channel_details_dict, attr_type=False, custom_root="channeldetails")).toprettyxml(indent="  "))

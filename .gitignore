@@ -187,3 +187,4 @@ fabric.properties
 
 # Config file
 config/config.ini
+/.idea/misc.xml

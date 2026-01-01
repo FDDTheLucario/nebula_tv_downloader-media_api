@@ -9,27 +9,27 @@ from models.urls import NEBULA_API_CONTENT_VIDEO_CHANNELS
 
 
 def get_channel_video_content(
-        channelSlug: str, authorizationHeader: str, waitAfterUnsuccessfulSeconds: int = 5
+        channel_slug: str, authorization_header: str, wait_after_unsuccessful_seconds: int = 5
 ) -> NebulaChannelVideoContentResponseModel:
     response = requests_get(
-        url=unquote(str(NEBULA_API_CONTENT_VIDEO_CHANNELS)).format(CHANNEL_SLUG=channelSlug),
+        url=unquote(str(NEBULA_API_CONTENT_VIDEO_CHANNELS)).format(CHANNEL_SLUG=channel_slug),
         headers={
-            "Authorization": authorizationHeader,
+            "Authorization": authorization_header,
         },
     )
     if response.status_code == 200:
-        currentData = NebulaChannelVideoContentResponseModel(**response.json())
+        current_data = NebulaChannelVideoContentResponseModel(**response.json())
         logging.info(
             "Received %s videos from channel `%s` in the initial request",
-            len(currentData.episodes.results),
-            channelSlug,
+            len(current_data.episodes.results),
+            channel_slug,
         )
-        currentCursorTimes = 0
-        while currentData.episodes.next is not None:
+        current_cursor_times = 0
+        while current_data.episodes.next is not None:
             response = requests_get(
-                url=currentData.episodes.next,
+                url=str(current_data.episodes.next),
                 headers={
-                    "Authorization": authorizationHeader,
+                    "Authorization": authorization_header,
                 },
             )
             if response.status_code == 200:
@@ -37,33 +37,33 @@ def get_channel_video_content(
                 logging.info(
                     "Received %s videos from channel `%s` from page #%s (total videos: %s)",
                     len(data.episodes.results),
-                    channelSlug,
-                    currentCursorTimes,
-                    len(currentData.episodes.results),
+                    channel_slug,
+                    current_cursor_times,
+                    len(current_data.episodes.results),
                 )
-                currentData.episodes.results.extend(data.episodes.results)
-                currentData.episodes.next = data.episodes.next
-                currentCursorTimes += 1
+                current_data.episodes.results.extend(data.episodes.results)
+                current_data.episodes.next = data.episodes.next
+                current_cursor_times += 1
                 continue
             elif response.status_code == 404:
                 logging.warning(
                     "Channel `%s` does not exist anymore",
-                    channelSlug,
+                    channel_slug,
                 )
-                return currentData
+                return current_data
             elif response.status_code == 429:
                 logging.warning(
                     "Rate limit reached for channel `%s`, waiting %s seconds",
-                    channelSlug,
-                    waitAfterUnsuccessfulSeconds,
+                    channel_slug,
+                    wait_after_unsuccessful_seconds,
                 )
-                sleep(waitAfterUnsuccessfulSeconds)
-                waitAfterUnsuccessfulSeconds *= 2
+                sleep(wait_after_unsuccessful_seconds)
+                wait_after_unsuccessful_seconds *= 2
                 continue
             raise Exception(
-                f"Failed to get channel video content for page #{currentCursorTimes} for `{channelSlug}`: `{response.content}` with status code {response.status_code}"
+                f"Failed to get channel video content for page #{current_cursor_times} for `{channel_slug}`: `{response.content}` with status code {response.status_code}"
             )
-        return currentData
+        return current_data
     raise Exception(
-        f"Failed to get channel video content for `{channelSlug}`: `{response.content}` with status code {response.status_code}"
+        f"Failed to get channel video content for `{channel_slug}`: `{response.content}` with status code {response.status_code}"
     )
