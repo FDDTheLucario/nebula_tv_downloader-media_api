@@ -1,4 +1,5 @@
 import logging
+from http import HTTPStatus
 from time import sleep
 from urllib.parse import unquote
 
@@ -17,7 +18,7 @@ def get_channel_video_content(
             "Authorization": authorization_header,
         },
     )
-    if response.status_code == 200:
+    if response.status_code == HTTPStatus.OK:
         current_data = NebulaChannelVideoContentResponseModel(**response.json())
         logging.info(
             "Received %s videos from channel `%s` in the initial request",
@@ -32,7 +33,7 @@ def get_channel_video_content(
                     "Authorization": authorization_header,
                 },
             )
-            if response.status_code == 200:
+            if response.status_code == HTTPStatus.OK:
                 data = NebulaChannelVideoContentResponseModel(**response.json())
                 logging.info(
                     "Received %s videos from channel `%s` from page #%s (total videos: %s)",
@@ -45,13 +46,13 @@ def get_channel_video_content(
                 current_data.episodes.next = data.episodes.next
                 current_cursor_times += 1
                 continue
-            elif response.status_code == 404:
+            elif response.status_code == HTTPStatus.NOT_FOUND:
                 logging.warning(
                     "Channel `%s` does not exist anymore",
                     channel_slug,
                 )
                 return current_data
-            elif response.status_code == 429:
+            elif response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
                 logging.warning(
                     "Rate limit reached for channel `%s`, waiting %s seconds",
                     channel_slug,
