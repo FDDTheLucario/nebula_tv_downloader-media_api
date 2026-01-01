@@ -46,12 +46,6 @@ def get_channel_video_content(
                 current_data.episodes.next = data.episodes.next
                 current_cursor_times += 1
                 continue
-            elif response.status_code == HTTPStatus.NOT_FOUND:
-                logging.warning(
-                    "Channel `%s` does not exist anymore",
-                    channel_slug,
-                )
-                return current_data
             elif response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
                 logging.warning(
                     "Rate limit reached for channel `%s`, waiting %s seconds",

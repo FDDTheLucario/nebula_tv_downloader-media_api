@@ -15,7 +15,7 @@ class QuotedConfigParser(ConfigParser):
 
 
 class Config:
-    def __init__(self, config_path: Path = Path("/config/config.ini")) -> None:
+    def __init__(self, config_path: Path = Path("config/config.ini")) -> None:
         config_original = QuotedConfigParser()
         config_original.read(config_path)
         self.__CONFIG = ConfigurationModel(

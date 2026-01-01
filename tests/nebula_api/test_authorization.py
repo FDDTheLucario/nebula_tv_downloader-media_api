@@ -1,10 +1,9 @@
 from http import HTTPStatus
 
 import pytest
-
+import tests
 from models.urls import NEBULA_USERAPI_AUTHORIZATION
-from NebulaAPI.Authorization import NebulaUserAuthorization, NebulaUserAPIAuthorizationTokenResponseModel
-import tests.consts
+from nebula_api.Authorization import NebulaUserAuthorization
 
 def test_authorization_valid_api_key_no_configured_auth_header_expect_header_to_be_set(requests_mock):
     auth_request = requests_mock.post(
