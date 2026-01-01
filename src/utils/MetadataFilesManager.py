@@ -2,7 +2,6 @@ from datetime import datetime
 import json
 from pathlib import Path
 from xml.dom.minidom import parseString
-from xml.etree.ElementTree import indent
 
 import dicttoxml
 

@@ -1,9 +1,9 @@
 import logging
 from config.Config import Config
-from NebulaAPI.Authorization import NebulaUserAuthorization
-from NebulaAPI.VideoFeedFetcher import get_all_channels_slugs_from_video_feed
-from NebulaAPI.ChannelVideos import get_channel_video_content
-from NebulaAPI.StreamingInformation import get_streaming_information_by_episode
+from nebula_api.Authorization import NebulaUserAuthorization
+from nebula_api.VideoFeedFetcher import get_all_channels_slugs_from_video_feed
+from nebula_api.ChannelVideos import get_channel_video_content
+from nebula_api.StreamingInformation import get_streaming_information_by_episode
 from models.nebula.VideoAttributes import VideoNebulaAttributes
 from utils.MetadataFilesManager import (
     create_channel_subdirectory_and_store_metadata_information, create_nfo_for_video, create_nfo_for_channel
@@ -99,7 +99,7 @@ def main() -> None:
             download_thumbnail(
                 str(episode.images.thumbnail.src), episode_directory / f"{episode.slug}-thumb.jpg"
             )
-            streamingInformation = get_streaming_information_by_episode(
+            streaming_information = get_streaming_information_by_episode(
                 video_slug=episode.slug,
                 authorization_header=NEBULA_AUTH.get_authorization_header(full=True),
             )
@@ -107,12 +107,12 @@ def main() -> None:
             episode_file_path = episode_directory / f"{episode.slug}"
             if not episode_file_path.exists():
                 download_video(
-                    url=str(streamingInformation.manifest),
+                    url=str(streaming_information.manifest),
                     output_file=episode_file_path,
                 )
 
             download_subtitles(
-                subtitles=streamingInformation.subtitles,
+                subtitles=streaming_information.subtitles,
                 output_directory=episode_directory,
             )
             create_nfo_for_video(
