@@ -55,7 +55,7 @@ def download_subtitles(
         outputName: str = (
             subtitle.language_code
             + "-"
-            + urlparse(subtitle.url)
+            + urlparse(str(subtitle.url))
             .path.split("/")[-1]
             .replace("-", "_")
             .replace(".", "_")
