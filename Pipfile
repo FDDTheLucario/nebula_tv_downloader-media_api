@@ -13,6 +13,7 @@ requests = "*"
 requests-mock = "*"
 ruff = "*"
 coverage = "*"
+pytest-mock = "*"
 
 [dev-packages]
 

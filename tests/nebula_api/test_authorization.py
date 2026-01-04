@@ -1,9 +1,11 @@
 from http import HTTPStatus
 
 import pytest
+
 import tests
 from models.urls import NEBULA_USERAPI_AUTHORIZATION
 from nebula_api.Authorization import NebulaUserAuthorization
+
 
 def test_authorization_valid_api_key_no_configured_auth_header_expect_header_to_be_set(requests_mock):
     auth_request = requests_mock.post(
@@ -28,7 +30,6 @@ def test_authorization_valid_api_key_no_configured_auth_header_expect_header_to_
     )
 
     expected_to_string = f"NebulaUserAuthorization(user_token={tests.consts.API_KEY}, authorization_header={tests.consts.AUTH_TOKEN})"
-
 
     full_auth_header = nebula_authorizer.get_authorization_header(full=True)
 
@@ -56,6 +57,7 @@ def test_authorization_valid_api_key_configured_auth_header_expect_header_to_not
     assert nebula_authorizer == expected_authorizer
     assert auth_request.call_count == 0
 
+
 def test_authorization_invalid_api_key_verify_exception_bubbles(requests_mock):
     auth_request = requests_mock.post(
         url=str(NEBULA_USERAPI_AUTHORIZATION),
@@ -71,4 +73,6 @@ def test_authorization_invalid_api_key_verify_exception_bubbles(requests_mock):
             authorization_header=None
         )
 
-    assert str(e.value) == f"Failed to get authorization token for a given user token: `{bytes(tests.consts.BAD_REQUEST, 'utf-8')}` with status code {HTTPStatus.BAD_REQUEST}"
+    assert str(
+        e.value) == f"Failed to get authorization token for a given user token: `{bytes(tests.consts.BAD_REQUEST, 'utf-8')}` with status code {HTTPStatus.BAD_REQUEST}"
+    assert auth_request.call_count == 1
