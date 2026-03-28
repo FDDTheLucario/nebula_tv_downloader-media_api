@@ -10,7 +10,7 @@ from models.nebula.Episode import NebulaChannelVideoContentEpisodeResult
 from models.nebula.Fetched import NebulaChannelVideoContentEpisodes
 
 
-def create_channel_subdirectory_and_store_metadata_information(
+def create_channel_subdirectory_if_not_exists_and_store_metadata_information(
     channel_slug: str,
     channel_data: NebulaChannelVideoContentDetails,
     episodes_data: NebulaChannelVideoContentEpisodes,

@@ -3,7 +3,7 @@ from http import HTTPStatus
 import pytest
 
 import tests.consts
-from nebula_api.ChannelVideos import get_channel_video_content
+from nebula_api.channel_videos import get_channel_video_content
 
 
 def test_get_channel_video_content_no_next_page(requests_mock):
@@ -25,7 +25,7 @@ def test_get_channel_video_content_no_next_page(requests_mock):
 def test_get_channel_video_content_with_next_page(requests_mock):
     requests_mock.get(
         tests.consts.CHANNEL_VIDEO_GET_URL, [
-            {'status_code': HTTPStatus.OK, 'json': tests.consts.CHANNEL_VIDEO_CONTENT_NEXT_PAGE,
+            {'status_code': HTTPStatus.OK, 'json': tests.consts.CHANNEL_VIDEO_CONTENT_CATEGORY_NEXT_PAGE,
              'headers': {'Authorization': tests.consts.FULL_AUTH_TOKEN}},
             {'status_code': HTTPStatus.OK, 'json': tests.consts.CHANNEL_VIDEO_CONTENT_NO_NEXT_PAGE,
              'headers': {'Authorization': tests.consts.FULL_AUTH_TOKEN}},
@@ -41,7 +41,7 @@ def test_get_channel_video_content_with_next_page(requests_mock):
 def test_get_channel_video_content_rate_limit_verify_graceful_handling(requests_mock, mocker):
     requests_mock.get(
         tests.consts.CHANNEL_VIDEO_GET_URL, [
-            {'status_code': HTTPStatus.OK, 'json': tests.consts.CHANNEL_VIDEO_CONTENT_NEXT_PAGE,
+            {'status_code': HTTPStatus.OK, 'json': tests.consts.CHANNEL_VIDEO_CONTENT_CATEGORY_NEXT_PAGE,
              'headers': {'Authorization': tests.consts.FULL_AUTH_TOKEN}},
             {'status_code': HTTPStatus.TOO_MANY_REQUESTS, 'headers': {'Authorization': tests.consts.FULL_AUTH_TOKEN}},
             {'status_code': HTTPStatus.OK, 'json': tests.consts.CHANNEL_VIDEO_CONTENT_NO_NEXT_PAGE,

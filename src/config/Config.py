@@ -54,6 +54,8 @@ class Config:
             ),
             Downloader=ConfigurationDownloaderModel(
                 DOWNLOAD_PATH=config_original.get("Downloader", "DOWNLOAD_PATH"),
+                LOAD_CHANNEL_DATA_FROM_DB=config_original.get("Downloader", "LOAD_CHANNEL_DATA_FROM_DB"),
+                SKIP_IF_VIDEO_EXISTS=config_original.get("Downloader", "SKIP_IF_VIDEO_EXISTS"),
             ),
         )
 

@@ -31,6 +31,8 @@ class ConfigurationNebulaFiltersModel(BaseModel):
 
 class ConfigurationDownloaderModel(BaseModel):
     DOWNLOAD_PATH: Path
+    LOAD_CHANNEL_DATA_FROM_DB: bool
+    SKIP_IF_VIDEO_EXISTS: bool
 
     def __init__(self, **data):
         super().__init__(**data)

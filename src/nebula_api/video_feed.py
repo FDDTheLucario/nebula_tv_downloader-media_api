@@ -1,3 +1,4 @@
+from http import HTTPStatus
 from urllib.parse import unquote
 
 from requests import get as requests_get
@@ -19,7 +20,7 @@ def get_all_channels_slugs_from_video_feed(
         ),
         headers={"Authorization": authorization_header},
     )
-    if response.status_code == 200:
+    if response.status_code == HTTPStatus.OK:
         data = NebulaChannelVideoContentEpisodes(**response.json())
         logging.info(
             "Received %s episodes from the initial video feed request",
@@ -34,15 +35,15 @@ def get_all_channels_slugs_from_video_feed(
                 },
             )
             if response.status_code == 200:
-                cursoredData = NebulaChannelVideoContentEpisodes(**response.json())
+                cursored_data = NebulaChannelVideoContentEpisodes(**response.json())
                 logging.info(
                     "Received %s episodes from the video feed for page #%s (total episodes: %s)",
-                    len(cursoredData.results),
+                    len(cursored_data.results),
                     cursor_times,
                     len(data.results),
                 )
-                data.results.extend(cursoredData.results)
-                data.next = cursoredData.next
+                data.results.extend(cursored_data.results)
+                data.next = cursored_data.next
                 cursor_times += 1
                 continue
             raise Exception(
