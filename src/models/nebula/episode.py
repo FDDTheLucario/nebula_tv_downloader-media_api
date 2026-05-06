@@ -1,5 +1,5 @@
 from pydantic import BaseModel, HttpUrl, NonNegativeInt
-from models.nebula.VideoAttributes import VideoNebulaAttributes
+from models.nebula.video_attributes import VideoNebulaAttributes
 
 
 class NebulaChannelVideoContentEpisodeResultImageInformation(BaseModel):

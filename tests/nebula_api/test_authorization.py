@@ -76,3 +76,41 @@ def test_authorization_invalid_api_key_verify_exception_bubbles(requests_mock):
     assert str(
         e.value) == f"Failed to get authorization token for a given user token: `{bytes(tests.consts.BAD_REQUEST, 'utf-8')}` with status code {HTTPStatus.BAD_REQUEST}"
     assert auth_request.call_count == 1
+
+
+def test_refresh_authorization_token_invokes_fetch(requests_mock):
+    requests_mock.post(url=str(NEBULA_USERAPI_AUTHORIZATION))
+    nebula_authorizer = NebulaUserAuthorization(
+        user_token=tests.consts.API_KEY,
+        authorization_header=tests.consts.AUTH_TOKEN,
+    )
+    nebula_authorizer.refresh_authorization_token()
+    assert nebula_authorizer.get_authorization_header() == tests.consts.AUTH_TOKEN
+
+
+def test_authorization_empty_user_token_raises(requests_mock):
+    requests_mock.post(url=str(NEBULA_USERAPI_AUTHORIZATION))
+    with pytest.raises(ValueError) as e:
+        NebulaUserAuthorization(user_token="", authorization_header=tests.consts.AUTH_TOKEN)
+    assert str(e.value) == "User token for Nebula API must not be empty"
+
+
+def test_authorization_empty_token_returned_from_api_raises(requests_mock):
+    requests_mock.post(
+        url=str(NEBULA_USERAPI_AUTHORIZATION),
+        status_code=HTTPStatus.OK,
+        json={"token": ""},
+    )
+    with pytest.raises(ValueError) as e:
+        NebulaUserAuthorization(user_token=tests.consts.API_KEY, authorization_header=None)
+    assert str(e.value) == "Authorization header must not be empty"
+
+
+def test_authorization_eq_with_non_instance_returns_false(requests_mock):
+    requests_mock.post(url=str(NEBULA_USERAPI_AUTHORIZATION))
+    nebula_authorizer = NebulaUserAuthorization(
+        user_token=tests.consts.API_KEY,
+        authorization_header=tests.consts.AUTH_TOKEN,
+    )
+    assert (nebula_authorizer == "not-an-authorizer") is False
+    assert (nebula_authorizer == None) is False  # noqa: E711

@@ -2,7 +2,7 @@ from yt_dlp import YoutubeDL
 from pathlib import Path
 import requests
 from PIL import Image
-from models.nebula.Streaming import NebulaVideoContentStreamSubtitles
+from models.nebula.streaming import NebulaVideoContentStreamSubtitles
 from urllib.parse import urlparse
 
 

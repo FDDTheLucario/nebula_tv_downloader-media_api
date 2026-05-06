@@ -5,7 +5,7 @@ from urllib.parse import unquote
 
 from requests import get as requests_get
 
-from models.nebula.Fetched import NebulaChannelVideoContentResponseModel
+from models.nebula.fetched import NebulaChannelVideoContentResponseModel
 from models.urls import NEBULA_API_CONTENT_VIDEO_CHANNELS
 
 

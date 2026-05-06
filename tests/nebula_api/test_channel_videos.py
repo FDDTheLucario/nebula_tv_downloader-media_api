@@ -67,3 +67,23 @@ def test_get_channel_video_content_unexpected_error_verify_exception_bubbles(req
         get_channel_video_content('nilered', tests.consts.FULL_AUTH_TOKEN)
     assert str(
         e.value) == f"Failed to get channel video content for `nilered`: `b'Internal Server Error'` with status code 500"
+
+
+def test_get_channel_video_content_unexpected_error_during_cursoring_verify_exception_bubbles(requests_mock):
+    requests_mock.get(
+        tests.consts.CHANNEL_VIDEO_GET_URL,
+        [
+            {'status_code': HTTPStatus.OK,
+             'json': tests.consts.CHANNEL_VIDEO_CONTENT_CATEGORY_NEXT_PAGE,
+             'headers': {'Authorization': tests.consts.FULL_AUTH_TOKEN}},
+            {'status_code': HTTPStatus.INTERNAL_SERVER_ERROR,
+             'headers': {'Authorization': tests.consts.FULL_AUTH_TOKEN},
+             'text': 'Internal Server Error'},
+        ],
+    )
+    with pytest.raises(Exception) as e:
+        get_channel_video_content('nilered', tests.consts.FULL_AUTH_TOKEN)
+    assert str(e.value) == (
+        "Failed to get channel video content for page #0 for `nilered`: "
+        "`b'Internal Server Error'` with status code 500"
+    )

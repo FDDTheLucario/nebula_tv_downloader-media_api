@@ -1,6 +1,6 @@
 from pydantic import BaseModel, HttpUrl
-from models.nebula.Episode import NebulaChannelVideoContentEpisodeResult
-from models.nebula.Channel import NebulaChannelVideoContentDetails
+from models.nebula.episode import NebulaChannelVideoContentEpisodeResult
+from models.nebula.channel import NebulaChannelVideoContentDetails
 
 
 class NebulaChannelVideoContentEpisodes(BaseModel):

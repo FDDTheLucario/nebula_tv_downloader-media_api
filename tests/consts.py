@@ -4,7 +4,7 @@ from urllib.parse import unquote
 from pydantic import HttpUrl
 
 import models.urls
-from models.nebula.Streaming import NebulaVideoContentStreamingResponseModel, NebulaVideoContentStreamSubtitles
+from models.nebula.streaming import NebulaVideoContentStreamingResponseModel, NebulaVideoContentStreamSubtitles
 from models.urls import NEBULA_API_VIDEO_STREAM_INFORMATION
 
 API_KEY = "019b8746-1ce7-7580-b8f1-ffc56cee883d"

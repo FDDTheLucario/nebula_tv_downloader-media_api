@@ -83,14 +83,17 @@ def test_get_all_channels_slugs_from_video_feed_no_category_verify_url_has_no_ca
 
 def test_get_all_channels_slugs_from_video_feed_error_when_cursoring_verify_exception_bubbles(requests_mock):
     requests_mock.get(
-        [{'url':tests.consts.GET_ALL_VIDEOS_NO_CATEGORY,
-        'status_code': HTTPStatus.OK, 'headers': {"Authorization": tests.consts.FULL_AUTH_TOKEN},
-          'json': tests.consts.NEBULA_CHANNEL_VIDEO_CONTENT_EPISODES_NO_CATEGORY}
-            ,
-         {'url':f'{tests.consts.GET_ALL_VIDEOS_NO_CATEGORY}?offset=20&page_size=20','status_code': HTTPStatus.INTERNAL_SERVER_ERROR, 'headers': {"Authorization": tests.consts.FULL_AUTH_TOKEN},
-          'text': 'Internal Server Error'}],
+        tests.consts.GET_ALL_VIDEOS_NO_CATEGORY,
+        [
+            {'status_code': HTTPStatus.OK,
+             'headers': {"Authorization": tests.consts.FULL_AUTH_TOKEN},
+             'json': tests.consts.NEBULA_CHANNEL_VIDEO_CONTENT_EPISODES_NO_CATEGORY},
+            {'status_code': HTTPStatus.INTERNAL_SERVER_ERROR,
+             'headers': {"Authorization": tests.consts.FULL_AUTH_TOKEN},
+             'text': 'Internal Server Error'},
+        ],
     )
     with pytest.raises(Exception) as e:
         get_all_channels_slugs_from_video_feed(tests.consts.FULL_AUTH_TOKEN, None, 2)
 
-    assert str(e.value) == f"Failed to get video feed for the page #1: `b'Internal Server Error'` with status code 500"
+    assert str(e.value) == f"Failed to get video feed for the page #0: `b'Internal Server Error'` with status code 500"

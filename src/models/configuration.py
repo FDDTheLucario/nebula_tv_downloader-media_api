@@ -3,43 +3,44 @@ from pathlib import Path
 
 
 class ConfigurationNebulaAPIModel(BaseModel):
-    USER_API_TOKEN: str
-    AUTHORIZATION_HEADER: str | None = None
-    USER_AGENT: str
+    user_api_token: str
+    authorization_header: str | None = None
+    user_agent: str
+    token_refresh_interval_hours: int
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.AUTHORIZATION_HEADER = self.AUTHORIZATION_HEADER or None
+        self.authorization_header = self.authorization_header or None
 
 
 class ConfigurationNebulaFiltersModel(BaseModel):
-    CATEGORY_SEARCH: str | None = None
-    INCLUDE_NEBULA_FIRST: bool = True
-    INCLUDE_NEBULA_PLUS: bool = True
-    INCLUDE_NEBULA_ORIGINALS: bool = True
-    INCLUDE_REGULAR_VIDEOS: bool = False
-    CHANNELS_TO_PARSE: list[str] | None = None
+    category_search: str | None = None
+    include_nebula_first: bool = True
+    include_nebula_plus: bool = True
+    include_nebula_originals: bool = True
+    include_regular_videos: bool = False
+    channels_to_parse: list[str] | None = None
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.CHANNELS_TO_PARSE = (
-            list(filter(None, self.CHANNELS_TO_PARSE))
-            if self.CHANNELS_TO_PARSE
+        self.channels_to_parse = (
+            list(filter(None, self.channels_to_parse))
+            if self.channels_to_parse
             else None
         )
 
 
 class ConfigurationDownloaderModel(BaseModel):
-    DOWNLOAD_PATH: Path
-    LOAD_CHANNEL_DATA_FROM_DB: bool
-    SKIP_IF_VIDEO_EXISTS: bool
+    download_path: Path
+    load_channel_data_from_db: bool
+    skip_if_video_exists: bool
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.DOWNLOAD_PATH = Path(self.DOWNLOAD_PATH)
+        self.download_path = Path(self.download_path)
 
 
 class ConfigurationModel(BaseModel):
-    NebulaAPI: ConfigurationNebulaAPIModel
-    NebulaFilters: ConfigurationNebulaFiltersModel
-    Downloader: ConfigurationDownloaderModel
+    nebula_api: ConfigurationNebulaAPIModel
+    nebula_filters: ConfigurationNebulaFiltersModel
+    downloader: ConfigurationDownloaderModel

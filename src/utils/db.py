@@ -2,19 +2,52 @@ import json
 import logging
 from pathlib import Path
 
-from models.nebula.Channel import NebulaChannelVideoContentDetails
-from models.nebula.Fetched import NebulaChannelVideoContentResponseModel, NebulaChannelVideoContentEpisodes
+from models.nebula.channel import NebulaChannelVideoContentDetails
+from models.nebula.fetched import (
+    NebulaChannelVideoContentEpisodes,
+    NebulaChannelVideoContentResponseModel,
+)
+
+CHANNEL_FILENAME = "channel.json"
+EPISODES_FILENAME = "episodes.json"
 
 
-def get_channel_info_from_db(channel_slug: str, output_directory: Path):
-    channel_directory = output_directory / channel_slug
-    logging.info(f"Fetching channel info for channel {channel_slug} from {channel_directory}")
+def _channel_dir(channel_slug: str, output_directory: Path) -> Path:
+    return output_directory / channel_slug
+
+
+def save_channel_info(
+    channel_slug: str,
+    channel_data: NebulaChannelVideoContentDetails,
+    episodes_data: NebulaChannelVideoContentEpisodes,
+    output_directory: Path,
+) -> Path:
+    channel_directory = _channel_dir(channel_slug, output_directory)
+    channel_directory.mkdir(parents=True, exist_ok=True)
+    logging.info("Saving channel info for `%s` to %s", channel_slug, channel_directory)
+    (channel_directory / CHANNEL_FILENAME).write_text(
+        json.dumps(channel_data.model_dump(), indent=4, default=str)
+    )
+    (channel_directory / EPISODES_FILENAME).write_text(
+        json.dumps(episodes_data.model_dump()["results"], indent=4, default=str)
+    )
+    return channel_directory
+
+
+def load_channel_info(
+    channel_slug: str, output_directory: Path
+) -> NebulaChannelVideoContentResponseModel:
+    channel_directory = _channel_dir(channel_slug, output_directory)
+    logging.info("Loading channel info for `%s` from %s", channel_slug, channel_directory)
     if not channel_directory.exists():
-        raise FileNotFoundError(f"Channel {channel_slug} not found, please create it first")
-    with open(channel_directory / "episodes.json", "r") as episodes:
-        episode_list = json.load(episodes)
-    with open(channel_directory / "channel.json", "r") as channel:
-        channel_data = json.load(channel)
-    episode_object = NebulaChannelVideoContentEpisodes(next=None, previous=None, results=episode_list)
-    channel_object = NebulaChannelVideoContentDetails(**channel_data)
-    return NebulaChannelVideoContentResponseModel(details=channel_object, episodes=episode_object)
+        raise FileNotFoundError(
+            f"Channel {channel_slug} not found, please create it first"
+        )
+    episodes_payload = json.loads((channel_directory / EPISODES_FILENAME).read_text())
+    channel_payload = json.loads((channel_directory / CHANNEL_FILENAME).read_text())
+    return NebulaChannelVideoContentResponseModel(
+        details=NebulaChannelVideoContentDetails(**channel_payload),
+        episodes=NebulaChannelVideoContentEpisodes(
+            next=None, previous=None, results=episodes_payload
+        ),
+    )
