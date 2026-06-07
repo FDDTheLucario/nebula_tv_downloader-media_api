@@ -107,3 +107,19 @@ def test_config_missing_section_raises(tmp_path):
     cfg_path = _write_config(tmp_path, bad)
     with pytest.raises(Exception):
         Config(cfg_path)
+
+
+def test_config_check_interval_hours_default_is_1(tmp_path):
+    # Config without check_interval_hours should default to 1
+    ini = _FULL_INI  # _FULL_INI doesn't have check_interval_hours
+    cfg_path = _write_config(tmp_path, ini)
+    config = Config(cfg_path)
+    assert config.downloader.check_interval_hours == 1
+
+
+def test_config_check_interval_hours_parsed_override(tmp_path):
+    # Config with check_interval_hours set to 3
+    ini = _FULL_INI + "check_interval_hours = 3\n"
+    cfg_path = _write_config(tmp_path, ini)
+    config = Config(cfg_path)
+    assert config.downloader.check_interval_hours == 3

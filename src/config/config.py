@@ -58,6 +58,7 @@ class Config:
                 download_path=config_original.get("downloader", "download_path"),
                 load_channel_data_from_db=config_original.get("downloader", "load_channel_data_from_db"),
                 skip_if_video_exists=config_original.get("downloader", "skip_if_video_exists"),
+                check_interval_hours=int(config_original.get("downloader", "check_interval_hours")) if config_original.has_option("downloader", "check_interval_hours") else 1,
             ),
         )
 

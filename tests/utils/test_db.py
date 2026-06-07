@@ -275,6 +275,32 @@ def test_roundtrip_preserves_nested_model_fields(tmp_path):
     assert episode.attributes == [VideoNebulaAttributes.IS_NEBULA_PLUS]
 
 
+# Test 14a: list_channel_slugs on empty db returns empty list
+def test_list_channel_slugs_empty_db(tmp_path):
+    from utils.db import list_channel_slugs
+    result = list_channel_slugs(tmp_path)
+    assert result == []
+
+
+# Test 14b: list_channel_slugs returns all slugs sorted
+def test_list_channel_slugs_returns_sorted_slugs(tmp_path):
+    from utils.db import list_channel_slugs
+    save_channel_info(
+        channel_slug="zulu-ch",
+        channel_data=_channel(slug="zulu-ch"),
+        episodes_data=_episodes(),
+        output_directory=tmp_path,
+    )
+    save_channel_info(
+        channel_slug="alpha-ch",
+        channel_data=_channel(slug="alpha-ch"),
+        episodes_data=_episodes(),
+        output_directory=tmp_path,
+    )
+    result = list_channel_slugs(tmp_path)
+    assert result == ["alpha-ch", "zulu-ch"]
+
+
 # Test 14: save is atomic on failure
 def test_save_is_atomic_on_failure(tmp_path):
     # First save: 2 episodes (committed)

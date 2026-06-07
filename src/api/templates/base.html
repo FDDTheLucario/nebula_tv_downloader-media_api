@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula Archiver</title>
+    <script src="https://unpkg.com/htmx.org@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: #222; color: white; padding: 20px 0; margin-bottom: 30px; }
+        h1 { margin: 0; }
+        .status-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .card { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card h3 { color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 10px; }
+        .card .number { font-size: 28px; font-weight: bold; color: #222; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #0056b3; }
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f0f0f0; font-weight: 600; }
+        .state-queued { color: #666; }
+        .state-running { color: #ff9800; font-weight: bold; }
+        .state-done { color: #4caf50; font-weight: bold; }
+        .state-failed { color: #f44336; font-weight: bold; }
+        .error-cell { font-size: 12px; color: #999; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+        h2 { margin-top: 30px; margin-bottom: 15px; font-size: 20px; }
+        .channels { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
+        .channel-tag { background: #e0e0e0; padding: 5px 10px; border-radius: 3px; font-size: 12px; }
+        .last-check { color: #999; font-size: 12px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Nebula Archiver</h1>
+        </div>
+    </header>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

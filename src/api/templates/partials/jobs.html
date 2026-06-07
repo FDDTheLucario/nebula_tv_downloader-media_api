@@ -1,0 +1,13 @@
+{% for job in jobs %}
+<tr>
+    <td>{{ job.episode_slug }}</td>
+    <td>{{ job.channel_slug }}</td>
+    <td><span class="state-{{ job.state }}">{{ job.state }}</span></td>
+    <td class="error-cell">{{ job.error or "-" }}</td>
+    <td>
+        {% if job.state == "failed" %}
+        <button hx-post="/api/jobs/{{ job.id }}/retry" hx-swap="none">Retry</button>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
