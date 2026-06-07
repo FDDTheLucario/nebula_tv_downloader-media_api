@@ -123,3 +123,15 @@ def load_channel_info(
                 next=None, previous=None, results=episodes_payload
             ),
         )
+
+
+def list_channel_slugs(output_directory: Path) -> list[str]:
+    """List all channel slugs in the database, sorted alphabetically.
+
+    Returns an empty list if the database doesn't exist or has no channels.
+    """
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT slug FROM channels ORDER BY slug")
+        rows = cursor.fetchall()
+        return [row[0] for row in rows]

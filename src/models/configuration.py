@@ -34,6 +34,7 @@ class ConfigurationDownloaderModel(BaseModel):
     download_path: Path
     load_channel_data_from_db: bool
     skip_if_video_exists: bool
+    check_interval_hours: int = 1
 
     def __init__(self, **data):
         super().__init__(**data)

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="status-cards">
+    <div class="card">
+        <h3>Queued</h3>
+        <div class="number">{{ counts.queued }}</div>
+    </div>
+    <div class="card">
+        <h3>Running</h3>
+        <div class="number">{{ counts.running }}</div>
+    </div>
+    <div class="card">
+        <h3>Done</h3>
+        <div class="number">{{ counts.done }}</div>
+    </div>
+    <div class="card">
+        <h3>Failed</h3>
+        <div class="number">{{ counts.failed }}</div>
+    </div>
+</div>
+
+{% if last_check %}
+<div class="last-check">Last check: {{ last_check }}</div>
+{% else %}
+<div class="last-check">Never checked</div>
+{% endif %}
+
+<button hx-post="/api/check" hx-swap="none">Check now</button>
+
+<h2>Channels</h2>
+<div class="channels">
+    {% for channel in channels %}
+    <div class="channel-tag">{{ channel }}</div>
+    {% endfor %}
+</div>
+
+<h2>Jobs</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Episode</th>
+            <th>Channel</th>
+            <th>State</th>
+            <th>Error</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody id="jobs" hx-get="/partials/jobs" hx-trigger="load, every 3s" hx-target="#jobs" hx-swap="innerHTML">
+        {% include "partials/jobs.html" %}
+    </tbody>
+</table>
+{% endblock %}
