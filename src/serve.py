@@ -40,10 +40,19 @@ def build():
     return create_app(config, auth)
 
 
-def main(host="0.0.0.0", port=8000) -> None:
-    """Run the uvicorn server."""
+def main(host="0.0.0.0", port=None) -> None:
+    """Run the uvicorn server.
+
+    The port defaults to the ``PORT`` env var (falling back to 8000) so the
+    container can avoid clashing in a shared network namespace (e.g. gluetun's
+    control server already binds :8000).
+    """
+    import os
+
     import uvicorn
 
+    if port is None:
+        port = int(os.environ.get("PORT", "8000"))
     uvicorn.run(build(), host=host, port=port)
 
 

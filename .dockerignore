@@ -1,0 +1,13 @@
+.git
+.idea
+.ruff_cache
+.pytest_cache
+tests
+docs
+*.md
+.coverage
+log.txt
+config/config.ini
+__pycache__
+**/__pycache__
+*.pyc
