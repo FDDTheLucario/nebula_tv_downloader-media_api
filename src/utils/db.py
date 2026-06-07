@@ -1,19 +1,48 @@
 import json
 import logging
+import sqlite3
+from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 
 from models.nebula.channel import NebulaChannelVideoContentDetails
+from models.nebula.episode import NebulaChannelVideoContentEpisodeResult
 from models.nebula.fetched import (
     NebulaChannelVideoContentEpisodes,
     NebulaChannelVideoContentResponseModel,
 )
 
-CHANNEL_FILENAME = "channel.json"
-EPISODES_FILENAME = "episodes.json"
+DB_FILENAME = "nebula.db"
 
 
-def _channel_dir(channel_slug: str, output_directory: Path) -> Path:
-    return output_directory / channel_slug
+class ChannelNotFoundError(LookupError):
+    pass
+
+
+def _connect(output_directory: Path) -> sqlite3.Connection:
+    output_directory.mkdir(parents=True, exist_ok=True)
+    db_path = output_directory / DB_FILENAME
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS channels (
+            slug          TEXT PRIMARY KEY,
+            details_json  TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS episodes (
+            channel_slug    TEXT NOT NULL,
+            slug            TEXT NOT NULL,
+            published_year  INTEGER,
+            episode_json    TEXT NOT NULL,
+            PRIMARY KEY (channel_slug, slug),
+            FOREIGN KEY (channel_slug) REFERENCES channels(slug) ON DELETE CASCADE
+        )
+    """)
+    conn.commit()
+    return conn
 
 
 def save_channel_info(
@@ -22,32 +51,75 @@ def save_channel_info(
     episodes_data: NebulaChannelVideoContentEpisodes,
     output_directory: Path,
 ) -> Path:
-    channel_directory = _channel_dir(channel_slug, output_directory)
+    channel_directory = output_directory / channel_slug
     channel_directory.mkdir(parents=True, exist_ok=True)
     logging.info("Saving channel info for `%s` to %s", channel_slug, channel_directory)
-    (channel_directory / CHANNEL_FILENAME).write_text(
-        json.dumps(channel_data.model_dump(), indent=4, default=str)
-    )
-    (channel_directory / EPISODES_FILENAME).write_text(
-        json.dumps(episodes_data.model_dump()["results"], indent=4, default=str)
-    )
+
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+
+        # Upsert channel
+        channel_json = json.dumps(channel_data.model_dump(), default=str)
+        cursor.execute(
+            "INSERT OR REPLACE INTO channels (slug, details_json) VALUES (?, ?)",
+            (channel_slug, channel_json),
+        )
+
+        # Delete existing episodes for this channel and insert new ones
+        cursor.execute("DELETE FROM episodes WHERE channel_slug = ?", (channel_slug,))
+
+        for episode in episodes_data.results:
+            episode_json = json.dumps(episode.model_dump(), default=str)
+            published_year = None
+            if episode.published_at:
+                try:
+                    published_year = datetime.fromisoformat(episode.published_at.replace("Z", "+00:00")).year
+                except (ValueError, AttributeError):
+                    pass
+
+            cursor.execute(
+                """INSERT INTO episodes
+                   (channel_slug, slug, published_year, episode_json)
+                   VALUES (?, ?, ?, ?)""",
+                (channel_slug, episode.slug, published_year, episode_json),
+            )
+
+        conn.commit()
+
     return channel_directory
 
 
 def load_channel_info(
     channel_slug: str, output_directory: Path
 ) -> NebulaChannelVideoContentResponseModel:
-    channel_directory = _channel_dir(channel_slug, output_directory)
-    logging.info("Loading channel info for `%s` from %s", channel_slug, channel_directory)
-    if not channel_directory.exists():
-        raise FileNotFoundError(
-            f"Channel {channel_slug} not found, please create it first"
+    logging.info("Loading channel info for `%s` from %s", channel_slug, output_directory)
+
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+
+        # Load channel
+        cursor.execute("SELECT details_json FROM channels WHERE slug = ?", (channel_slug,))
+        row = cursor.fetchone()
+
+        if row is None:
+            raise ChannelNotFoundError(f"Channel {channel_slug} not found")
+
+        channel_payload = json.loads(row[0])
+        channel_details = NebulaChannelVideoContentDetails(**channel_payload)
+
+        # Load episodes
+        cursor.execute(
+            "SELECT episode_json FROM episodes WHERE channel_slug = ? ORDER BY slug",
+            (channel_slug,),
         )
-    episodes_payload = json.loads((channel_directory / EPISODES_FILENAME).read_text())
-    channel_payload = json.loads((channel_directory / CHANNEL_FILENAME).read_text())
-    return NebulaChannelVideoContentResponseModel(
-        details=NebulaChannelVideoContentDetails(**channel_payload),
-        episodes=NebulaChannelVideoContentEpisodes(
-            next=None, previous=None, results=episodes_payload
-        ),
-    )
+        episodes_payload = [
+            NebulaChannelVideoContentEpisodeResult(**json.loads(row[0]))
+            for row in cursor.fetchall()
+        ]
+
+        return NebulaChannelVideoContentResponseModel(
+            details=channel_details,
+            episodes=NebulaChannelVideoContentEpisodes(
+                next=None, previous=None, results=episodes_payload
+            ),
+        )
