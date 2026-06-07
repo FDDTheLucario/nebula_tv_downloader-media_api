@@ -4,82 +4,111 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nebula Archiver</title>
+    <script>
+        // Apply saved theme before paint to avoid a flash. Dark is the default.
+        (function () {
+            var t = localStorage.getItem("theme") || "dark";
+            document.documentElement.setAttribute("data-theme", t);
+        })();
+        function toggleTheme() {
+            var cur = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+            var next = cur === "light" ? "dark" : "light";
+            document.documentElement.setAttribute("data-theme", next);
+            localStorage.setItem("theme", next);
+        }
+    </script>
     <script src="https://unpkg.com/htmx.org@2"></script>
     <style>
+        :root, :root[data-theme="dark"] {
+            --bg: #14161a; --surface: #1e2128; --surface-2: #262a33;
+            --text: #e4e6eb; --text-muted: #9aa0aa; --border: #333842;
+            --header-bg: #0f1115; --accent: #3b82f6; --accent-hover: #2563eb;
+            --shadow: rgba(0,0,0,0.4);
+        }
+        :root[data-theme="light"] {
+            --bg: #f5f5f5; --surface: #ffffff; --surface-2: #f0f0f0;
+            --text: #333333; --text-muted: #999999; --border: #dddddd;
+            --header-bg: #222222; --accent: #007bff; --accent-hover: #0056b3;
+            --shadow: rgba(0,0,0,0.1);
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #333; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        header { background: #222; color: white; padding: 20px 0; margin-bottom: 30px; }
+        header { background: var(--header-bg); color: #fff; padding: 20px 0; margin-bottom: 30px; }
+        .header-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         h1 { margin: 0; }
+        .theme-toggle { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 13px; }
+        .theme-toggle:hover { background: rgba(255,255,255,0.12); }
         .status-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .card { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .card h3 { color: #666; font-size: 12px; text-transform: uppercase; margin-bottom: 10px; }
-        .card .number { font-size: 28px; font-weight: bold; color: #222; }
-        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
-        button:hover { background: #0056b3; }
-        table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #f0f0f0; font-weight: 600; }
-        .state-queued { color: #666; }
+        .card { background: var(--surface); padding: 20px; border-radius: 5px; box-shadow: 0 2px 4px var(--shadow); }
+        .card h3 { color: var(--text-muted); font-size: 12px; text-transform: uppercase; margin-bottom: 10px; }
+        .card .number { font-size: 28px; font-weight: bold; color: var(--text); }
+        button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: var(--accent-hover); }
+        table { width: 100%; border-collapse: collapse; background: var(--surface); margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: var(--surface-2); font-weight: 600; }
+        .state-queued { color: var(--text-muted); }
         .state-running { color: #ff9800; font-weight: bold; }
         .state-done { color: #4caf50; font-weight: bold; }
         .state-failed { color: #f44336; font-weight: bold; }
-        .error-cell { font-size: 12px; color: #999; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+        .error-cell { font-size: 12px; color: var(--text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
         h2 { margin-top: 30px; margin-bottom: 15px; font-size: 20px; }
         .channels { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
-        .channel-tag { background: #e0e0e0; padding: 5px 10px; border-radius: 3px; font-size: 12px; }
-        .last-check { color: #999; font-size: 12px; margin: 10px 0; }
+        .channel-tag { background: var(--surface-2); padding: 5px 10px; border-radius: 3px; font-size: 12px; }
+        .last-check { color: var(--text-muted); font-size: 12px; margin: 10px 0; }
         .channel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin: 15px 0; }
-        .channel-card { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 15px; display: flex; align-items: center; gap: 12px; }
+        .channel-card { background: var(--surface); border-radius: 8px; box-shadow: 0 2px 4px var(--shadow); padding: 15px; display: flex; align-items: center; gap: 12px; }
         .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
         .channel-meta { min-width: 0; }
         .channel-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .channel-title a { color: inherit; text-decoration: none; }
         .channel-title a:hover { text-decoration: underline; }
-        .channel-sub { color: #888; font-size: 12px; margin-top: 3px; }
+        .channel-sub { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
         img.thumb { width: 120px; border-radius: 4px; display: block; }
         .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; margin: 2px 2px 0 0; }
         .badge-original { background: #e8f0fe; color: #1a56db; }
         .badge-plus { background: #fdf3e7; color: #d4731a; }
         .badge-first { background: #edfcf1; color: #1d8a3d; }
         .sub-list { list-style: none; padding: 0; margin: 15px 0; }
-        .sub-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #eee; }
+        .sub-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
         .sub-meta { flex: 1; min-width: 0; }
         .sub-remove { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-        .del-data { font-size: 12px; color: #888; }
-        .sub-empty { color: #999; padding: 12px 0; }
+        .del-data { font-size: 12px; color: var(--text-muted); }
+        .sub-empty { color: var(--text-muted); padding: 12px 0; }
         .add-form { display: flex; gap: 8px; margin: 10px 0; }
-        .add-form input[type="text"] { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; flex: 1; }
-        .hint { font-size: 12px; color: #999; margin: 6px 0 20px; }
+        .add-form input[type="text"] { padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; flex: 1; background: var(--surface); color: var(--text); }
+        .hint { font-size: 12px; color: var(--text-muted); margin: 6px 0 20px; }
         .nav-link { display: inline-block; background: #6c757d; color: white; text-decoration: none; padding: 10px 20px; border-radius: 4px; font-size: 14px; margin-left: 8px; }
         .nav-link:hover { background: #545b62; }
         .search-wrap { position: relative; flex: 1; }
-        .search-dropdown { list-style: none; margin: 0; padding: 0; position: absolute; top: 100%; left: 0; right: 0; z-index: 10; background: white; border: 1px solid #ddd; border-top: none; border-radius: 0 0 4px 4px; max-height: 320px; overflow-y: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .search-dropdown { list-style: none; margin: 0; padding: 0; position: absolute; top: 100%; left: 0; right: 0; z-index: 10; background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 4px 4px; max-height: 320px; overflow-y: auto; box-shadow: 0 4px 8px var(--shadow); }
         .search-dropdown:empty { display: none; }
         .search-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; }
-        .search-row:hover { background: #f0f7ff; }
+        .search-row:hover { background: var(--surface-2); }
         .search-row .avatar { width: 28px; height: 28px; }
         .search-title { font-weight: 600; font-size: 13px; }
-        .search-slug { color: #999; font-size: 12px; }
-        .search-added { margin-left: auto; color: #1d8a3d; font-size: 11px; font-weight: 600; }
-        .config-form { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; margin: 15px 0; max-width: 640px; }
-        .config-form fieldset { border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px; margin-bottom: 18px; }
-        .config-form legend { font-weight: 600; font-size: 13px; color: #555; padding: 0 6px; }
-        .config-form label { display: block; font-size: 13px; color: #444; margin-bottom: 12px; }
+        .search-slug { color: var(--text-muted); font-size: 12px; }
+        .search-added { margin-left: auto; color: #4caf50; font-size: 11px; font-weight: 600; }
+        .config-form { background: var(--surface); border-radius: 8px; box-shadow: 0 2px 4px var(--shadow); padding: 20px; margin: 15px 0; max-width: 640px; }
+        .config-form fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-bottom: 18px; }
+        .config-form legend { font-weight: 600; font-size: 13px; color: var(--text-muted); padding: 0 6px; }
+        .config-form label { display: block; font-size: 13px; color: var(--text); margin-bottom: 12px; }
         .config-form label.check { display: flex; align-items: center; gap: 8px; }
-        .config-form input[type="text"], .config-form input[type="password"], .config-form input[type="number"] { display: block; width: 100%; margin-top: 4px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .config-form input[type="text"], .config-form input[type="password"], .config-form input[type="number"] { display: block; width: 100%; margin-top: 4px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--bg); color: var(--text); }
         .config-form input[type="checkbox"] { margin-top: 0; }
-        .config-form .hint { display: inline; color: #999; font-size: 11px; }
+        .config-form .hint { display: inline; color: var(--text-muted); font-size: 11px; }
         .config-msg { padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; }
-        .config-msg.ok { background: #edfcf1; color: #1d8a3d; }
-        .config-msg.err { background: #fdecea; color: #c0392b; }
-        .config-msg .warn { color: #d4731a; }
+        .config-msg.ok { background: rgba(76,175,80,0.15); color: #4caf50; }
+        .config-msg.err { background: rgba(244,67,54,0.15); color: #f44336; }
+        .config-msg .warn { color: #ff9800; }
     </style>
 </head>
 <body>
     <header>
-        <div class="container">
+        <div class="container header-bar">
             <h1>Nebula Archiver</h1>
+            <button type="button" class="theme-toggle" onclick="toggleTheme()">Theme</button>
         </div>
     </header>
     <div class="container">
