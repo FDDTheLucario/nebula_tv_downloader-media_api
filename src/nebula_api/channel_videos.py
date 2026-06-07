@@ -19,7 +19,7 @@ def get_channel_video_content(
         },
     )
     if response.status_code == HTTPStatus.OK:
-        current_data = NebulaChannelVideoContentResponseModel(**response.json())
+        current_data = NebulaChannelVideoContentResponseModel.model_validate(response.json())
         logging.info(
             "Received %s videos from channel `%s` in the initial request",
             len(current_data.episodes.results),
@@ -34,7 +34,7 @@ def get_channel_video_content(
                 },
             )
             if response.status_code == HTTPStatus.OK:
-                data = NebulaChannelVideoContentResponseModel(**response.json())
+                data = NebulaChannelVideoContentResponseModel.model_validate(response.json())
                 logging.info(
                     "Received %s videos from channel `%s` from page #%s (total videos: %s)",
                     len(data.episodes.results),

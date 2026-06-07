@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from main import download_episode
 from models.nebula.episode import NebulaChannelVideoContentEpisodeResult
 from models.nebula.fetched import NebulaChannelVideoContentResponseModel
 from models.nebula.video_attributes import VideoNebulaAttributes
+from nebula_api.channel_directory import get_channel_directory
 from nebula_api.channel_videos import get_channel_video_content
 from nebula_api.video_feed import get_all_channels_slugs_from_video_feed
 from nebula_api.authorization import NebulaUserAuthorization
@@ -209,6 +211,135 @@ def seed_subscriptions_from_config(config: Config) -> int:
         if db.add_subscription(download_path, slug):
             count += 1
     return count
+
+
+DIRECTORY_CACHE_KEY = "channel_directory_cache"
+DIRECTORY_TTL_SECONDS = 6 * 60 * 60  # 6h
+
+
+def get_cached_directory(
+    config: Config,
+    auth: NebulaUserAuthorization,
+    *,
+    fetch=get_channel_directory,
+    now=_now,
+    ttl_seconds: int = DIRECTORY_TTL_SECONDS,
+    force: bool = False,
+) -> list[dict]:
+    """Return the channel directory as a list of {slug,title,avatar_url} dicts.
+    Served from app_state JSON cache when fresh; otherwise fetched live, cached,
+    and returned. On a live-fetch failure, fall back to a stale cache if present;
+    if none, return []. Never raises."""
+    download_path = config.downloader.download_path
+    cached = jobs_db.get_state(download_path, DIRECTORY_CACHE_KEY)
+    cached_channels: list[dict] = []
+    if cached:
+        try:
+            payload = json.loads(cached)
+            cached_channels = payload.get("channels", [])
+            fetched_at = payload.get("fetched_at")
+            if not force and fetched_at:
+                age = (
+                    datetime.fromisoformat(now()) - datetime.fromisoformat(fetched_at)
+                ).total_seconds()
+                if age < ttl_seconds:
+                    return cached_channels
+        except (json.JSONDecodeError, ValueError, TypeError):
+            cached_channels = []
+
+    try:
+        results = fetch(auth.get_authorization_header(full=True))
+    except Exception:
+        logging.warning("Channel directory fetch failed; serving stale cache")
+        return cached_channels
+
+    channels = [
+        {"slug": r.slug, "title": r.title, "avatar_url": r.avatar_url()}
+        for r in results
+    ]
+    jobs_db.set_state(
+        download_path,
+        DIRECTORY_CACHE_KEY,
+        json.dumps({"fetched_at": now(), "channels": channels}),
+    )
+    return channels
+
+
+def _match_rank(query: str, slug: str, title: str) -> int | None:
+    """Rank a candidate against query (lower = better); None if no match."""
+    slug_cf = slug.casefold()
+    title_cf = title.casefold()
+    if slug_cf == query:
+        return 0
+    if slug_cf.startswith(query):
+        return 1
+    if title_cf.startswith(query):
+        return 2
+    if query in slug_cf or query in title_cf:
+        return 3
+    return None
+
+
+def search_channels(
+    config: Config,
+    auth: NebulaUserAuthorization,
+    query: str,
+    *,
+    limit: int = 8,
+    directory=get_cached_directory,
+) -> list[dict]:
+    """Return up to `limit` channel suggestions matching `query`, merged from
+    local DB channels (+subscriptions) and the cached Nebula directory.
+    Each dict: {slug, title, avatar_url, subscribed: bool, source}.
+    Empty/whitespace query → []."""
+    q = query.strip().casefold()
+    if not q:
+        return []
+
+    download_path = config.downloader.download_path
+
+    merged: dict[str, dict] = {}
+    for info in db.list_channels_with_info(download_path):
+        merged[info["slug"]] = {
+            "slug": info["slug"],
+            "title": info.get("title") or info["slug"],
+            "avatar_url": info.get("avatar_url"),
+            "source": "local",
+        }
+    for slug in db.list_subscriptions(download_path):
+        if slug not in merged:
+            merged[slug] = {
+                "slug": slug,
+                "title": slug,
+                "avatar_url": None,
+                "source": "local",
+            }
+    for item in directory(config, auth):
+        if item["slug"] not in merged:
+            merged[item["slug"]] = {
+                "slug": item["slug"],
+                "title": item.get("title") or item["slug"],
+                "avatar_url": item.get("avatar_url"),
+                "source": "remote",
+            }
+
+    ranked = []
+    for entry in merged.values():
+        rank = _match_rank(q, entry["slug"], entry["title"])
+        if rank is not None:
+            ranked.append((rank, entry["slug"], entry))
+
+    ranked.sort(key=lambda t: (t[0], t[1]))
+
+    results = []
+    for _, _, entry in ranked[:limit]:
+        results.append(
+            {
+                **entry,
+                "subscribed": db.is_subscribed(download_path, entry["slug"]),
+            }
+        )
+    return results
 
 
 def process_job(

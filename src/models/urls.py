@@ -12,6 +12,10 @@ NEBULA_API_CONTENT_VIDEO_CHANNELS_CURSOR = url_type_adapter.validate_python(
     "https://content.api.nebula.app/video/channels/{CHANNEL_SLUG}/?cursor={CURSOR}"
 )
 
+NEBULA_API_CONTENT_VIDEO_CHANNELS_DIRECTORY = url_type_adapter.validate_python(
+    "https://content.api.nebula.app/video/channels/"
+)
+
 NEBULA_API_VIDEO_STREAM_INFORMATION = url_type_adapter.validate_python(
     "https://content.api.nebula.app/video/{VIDEO_SLUG}/stream/"
 )

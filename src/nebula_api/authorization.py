@@ -23,12 +23,12 @@ class NebulaUserAuthorization:
             )
             return
         response = requests_post(
-            url=NEBULA_USERAPI_AUTHORIZATION,
+            url=str(NEBULA_USERAPI_AUTHORIZATION),
             headers={"Authorization": f"Token {self.__user_token}"},
         )
         if response.status_code == 200:
-            self.__authorization_header = NebulaUserAPIAuthorizationTokenResponseModel(
-                **response.json()
+            self.__authorization_header = NebulaUserAPIAuthorizationTokenResponseModel.model_validate(
+                response.json()
             ).token
             logging.info(
                 "Successfully fetched authorization token from Nebula API: `%s...`",

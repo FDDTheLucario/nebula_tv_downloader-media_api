@@ -1,0 +1,17 @@
+{% if results %}
+<ul class="search-dropdown" id="channel-search-results">
+  {% for r in results %}
+  <li class="search-row"
+      data-slug="{{ r.slug }}"
+      onclick="document.getElementById('slug-input').value='{{ r.slug }}';
+               document.getElementById('channel-search-results').innerHTML='';">
+    {% if r.avatar_url %}<img class="avatar" src="{{ r.avatar_url }}" alt="" loading="lazy">{% endif %}
+    <span class="search-title">{{ r.title or r.slug }}</span>
+    <span class="search-slug">{{ r.slug }}</span>
+    {% if r.subscribed %}<span class="search-added">&#10003; added</span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<ul class="search-dropdown" id="channel-search-results"></ul>
+{% endif %}

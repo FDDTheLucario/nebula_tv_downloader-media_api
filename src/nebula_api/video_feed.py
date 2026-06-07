@@ -21,7 +21,7 @@ def get_all_channels_slugs_from_video_feed(
         headers={"Authorization": authorization_header},
     )
     if response.status_code == HTTPStatus.OK:
-        data = NebulaChannelVideoContentEpisodes(**response.json())
+        data = NebulaChannelVideoContentEpisodes.model_validate(response.json())
         logging.info(
             "Received %s episodes from the initial video feed request",
             len(data.results),
@@ -29,13 +29,13 @@ def get_all_channels_slugs_from_video_feed(
         cursor_times = 0
         while data.next is not None and cursor_times < cursor_times_limit_fetch_maximum:
             response = requests_get(
-                url=data.next,
+                url=str(data.next),
                 headers={
                     "Authorization": authorization_header,
                 },
             )
             if response.status_code == 200:
-                cursored_data = NebulaChannelVideoContentEpisodes(**response.json())
+                cursored_data = NebulaChannelVideoContentEpisodes.model_validate(response.json())
                 logging.info(
                     "Received %s episodes from the video feed for page #%s (total episodes: %s)",
                     len(cursored_data.results),

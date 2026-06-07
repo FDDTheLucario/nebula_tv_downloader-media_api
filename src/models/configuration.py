@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from pathlib import Path
+
+from pydantic import BaseModel, field_validator
 
 
 class ConfigurationNebulaAPIModel(BaseModel):
@@ -8,9 +9,10 @@ class ConfigurationNebulaAPIModel(BaseModel):
     user_agent: str
     token_refresh_interval_hours: int
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        self.authorization_header = self.authorization_header or None
+    @field_validator("authorization_header", mode="after")
+    @classmethod
+    def _empty_header_to_none(cls, value: str | None) -> str | None:
+        return value or None
 
 
 class ConfigurationNebulaFiltersModel(BaseModel):
@@ -21,13 +23,10 @@ class ConfigurationNebulaFiltersModel(BaseModel):
     include_regular_videos: bool = False
     channels_to_parse: list[str] | None = None
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        self.channels_to_parse = (
-            list(filter(None, self.channels_to_parse))
-            if self.channels_to_parse
-            else None
-        )
+    @field_validator("channels_to_parse", mode="after")
+    @classmethod
+    def _drop_empty_channels(cls, value: list[str] | None) -> list[str] | None:
+        return list(filter(None, value)) if value else None
 
 
 class ConfigurationDownloaderModel(BaseModel):
@@ -35,10 +34,6 @@ class ConfigurationDownloaderModel(BaseModel):
     load_channel_data_from_db: bool
     skip_if_video_exists: bool
     check_interval_hours: int = 1
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        self.download_path = Path(self.download_path)
 
 
 class ConfigurationModel(BaseModel):

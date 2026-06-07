@@ -518,3 +518,271 @@ class TestSeedSubscriptions:
         subs = db.list_subscriptions(config.downloader.download_path)
         assert "ch-slug" not in subs
         assert "existing" in subs
+
+
+def _save_local_channel(download_path, slug, title=None):
+    """Persist a channel row (no episodes) for search/local tests."""
+    details = NebulaChannelVideoContentDetails(
+        **_channel_payload(slug=slug, title=title or slug)
+    )
+    episodes = NebulaChannelVideoContentEpisodes(next=None, previous=None, results=[])
+    save_channel_info(
+        channel_slug=slug,
+        channel_data=details,
+        episodes_data=episodes,
+        output_directory=download_path,
+    )
+
+
+FIXED_NOW = "2026-06-07T00:00:00"
+
+
+def _now_stub(value=FIXED_NOW):
+    return lambda: value
+
+
+class TestGetCachedDirectory:
+    def test_fetches_when_empty(self, config, fake_auth):
+        from api.service import get_cached_directory
+        from models.nebula.channel_directory import NebulaChannelDirectoryResult
+
+        dp = config.downloader.download_path
+        stub = Mock(
+            return_value=[
+                NebulaChannelDirectoryResult(slug="a", title="A"),
+                NebulaChannelDirectoryResult(slug="b", title="B"),
+            ]
+        )
+        out = get_cached_directory(config, fake_auth, fetch=stub, now=_now_stub())
+        assert [c["slug"] for c in out] == ["a", "b"]
+        assert all(set(c) == {"slug", "title", "avatar_url"} for c in out)
+        stub.assert_called_once()
+        cached = jobs_db.get_state(dp, "channel_directory_cache")
+        assert cached is not None and "a" in cached
+
+    def test_serves_fresh_cache(self, config, fake_auth):
+        import json
+
+        from api.service import get_cached_directory
+
+        dp = config.downloader.download_path
+        jobs_db.set_state(
+            dp,
+            "channel_directory_cache",
+            json.dumps(
+                {
+                    "fetched_at": "2026-06-06T23:59:00",
+                    "channels": [{"slug": "x", "title": "X", "avatar_url": None}],
+                }
+            ),
+        )
+
+        def boom(*a, **k):
+            raise AssertionError("should not fetch")
+
+        out = get_cached_directory(config, fake_auth, fetch=boom, now=_now_stub())
+        assert [c["slug"] for c in out] == ["x"]
+
+    def test_refetches_when_stale(self, config, fake_auth):
+        import json
+
+        from api.service import get_cached_directory
+        from models.nebula.channel_directory import NebulaChannelDirectoryResult
+
+        dp = config.downloader.download_path
+        jobs_db.set_state(
+            dp,
+            "channel_directory_cache",
+            json.dumps(
+                {
+                    "fetched_at": "2026-06-06T00:00:00",
+                    "channels": [{"slug": "old", "title": "Old", "avatar_url": None}],
+                }
+            ),
+        )
+        stub = Mock(return_value=[NebulaChannelDirectoryResult(slug="new", title="New")])
+        out = get_cached_directory(config, fake_auth, fetch=stub, now=_now_stub())
+        assert [c["slug"] for c in out] == ["new"]
+        stub.assert_called_once()
+
+    def test_force_refetches(self, config, fake_auth):
+        import json
+
+        from api.service import get_cached_directory
+        from models.nebula.channel_directory import NebulaChannelDirectoryResult
+
+        dp = config.downloader.download_path
+        jobs_db.set_state(
+            dp,
+            "channel_directory_cache",
+            json.dumps(
+                {
+                    "fetched_at": "2026-06-06T23:59:00",
+                    "channels": [{"slug": "x", "title": "X", "avatar_url": None}],
+                }
+            ),
+        )
+        stub = Mock(return_value=[NebulaChannelDirectoryResult(slug="y", title="Y")])
+        out = get_cached_directory(
+            config, fake_auth, fetch=stub, now=_now_stub(), force=True
+        )
+        assert [c["slug"] for c in out] == ["y"]
+        stub.assert_called_once()
+
+    def test_fetch_error_returns_stale(self, config, fake_auth):
+        import json
+
+        from api.service import get_cached_directory
+
+        dp = config.downloader.download_path
+        jobs_db.set_state(
+            dp,
+            "channel_directory_cache",
+            json.dumps(
+                {
+                    "fetched_at": "2026-06-06T00:00:00",
+                    "channels": [{"slug": "stale", "title": "S", "avatar_url": None}],
+                }
+            ),
+        )
+
+        def boom(*a, **k):
+            raise RuntimeError("down")
+
+        out = get_cached_directory(config, fake_auth, fetch=boom, now=_now_stub())
+        assert [c["slug"] for c in out] == ["stale"]
+
+    def test_fetch_error_no_cache_returns_empty(self, config, fake_auth):
+        from api.service import get_cached_directory
+
+        def boom(*a, **k):
+            raise RuntimeError("down")
+
+        out = get_cached_directory(config, fake_auth, fetch=boom, now=_now_stub())
+        assert out == []
+
+    def test_corrupt_cache_refetches(self, config, fake_auth):
+        from api.service import get_cached_directory
+        from models.nebula.channel_directory import NebulaChannelDirectoryResult
+
+        dp = config.downloader.download_path
+        jobs_db.set_state(dp, "channel_directory_cache", "not-json{")
+        stub = Mock(return_value=[NebulaChannelDirectoryResult(slug="z", title="Z")])
+        out = get_cached_directory(config, fake_auth, fetch=stub, now=_now_stub())
+        assert [c["slug"] for c in out] == ["z"]
+
+
+def _dir_stub(*items):
+    """Return a directory() replacement yielding {slug,title,avatar_url} dicts."""
+    rows = [
+        {"slug": s, "title": t, "avatar_url": None}
+        for s, t in items
+    ]
+    return Mock(return_value=rows)
+
+
+class TestSearchChannels:
+    def test_empty_query_returns_empty(self, config, fake_auth):
+        from api.service import search_channels
+
+        stub = Mock(side_effect=AssertionError("should not be called"))
+        assert search_channels(config, fake_auth, "", directory=stub) == []
+        assert search_channels(config, fake_auth, "   ", directory=stub) == []
+
+    def test_matches_slug_substring(self, config, fake_auth):
+        from api.service import search_channels
+
+        directory = _dir_stub(
+            ("jetlag", "Jetlag"),
+            ("jet-lag-the-game", "Jet Lag The Game"),
+            ("legaleagle", "LegalEagle"),
+        )
+        out = search_channels(config, fake_auth, "jet", directory=directory)
+        slugs = {r["slug"] for r in out}
+        assert slugs == {"jetlag", "jet-lag-the-game"}
+
+    def test_matches_title_substring(self, config, fake_auth):
+        from api.service import search_channels
+
+        directory = _dir_stub(("tlg", "Jet Lag: The Game"))
+        out = search_channels(config, fake_auth, "lag", directory=directory)
+        assert [r["slug"] for r in out] == ["tlg"]
+
+    def test_title_prefix_outranks_substring(self, config, fake_auth):
+        from api.service import search_channels
+
+        directory = _dir_stub(
+            ("xyz", "Jet Lag: The Game"),  # "lag" only as substring -> rank 3
+            ("abc", "Lag Masters"),  # title startswith "lag" -> rank 2
+        )
+        out = search_channels(config, fake_auth, "lag", directory=directory)
+        assert [r["slug"] for r in out] == ["abc", "xyz"]
+
+    def test_ranking_exact_then_prefix(self, config, fake_auth):
+        from api.service import search_channels
+
+        directory = _dir_stub(
+            ("superjet", "Superjet"),
+            ("jetlag", "Jetlag"),
+            ("jet", "Jet"),
+        )
+        out = search_channels(config, fake_auth, "jet", directory=directory)
+        assert [r["slug"] for r in out] == ["jet", "jetlag", "superjet"]
+
+    def test_respects_limit(self, config, fake_auth):
+        from api.service import search_channels
+
+        directory = _dir_stub(*[(f"jet{i:02d}", f"Jet {i}") for i in range(20)])
+        out = search_channels(config, fake_auth, "jet", directory=directory, limit=5)
+        assert len(out) == 5
+
+    def test_local_first_and_marks_subscribed(self, config, fake_auth):
+        from api.service import search_channels
+
+        dp = config.downloader.download_path
+        _save_local_channel(dp, "jetlag", title="Local Jetlag")
+        db.add_subscription(dp, "jetlag")
+        directory = _dir_stub(("jetlag", "Remote Jetlag"))
+        out = search_channels(config, fake_auth, "jet", directory=directory)
+        assert len(out) == 1
+        row = out[0]
+        assert row["slug"] == "jetlag"
+        assert row["source"] == "local"
+        assert row["title"] == "Local Jetlag"
+        assert row["subscribed"] is True
+
+    def test_includes_remote_only(self, config, fake_auth):
+        from api.service import search_channels
+
+        directory = _dir_stub(("remoteonly", "Remote Only"))
+        out = search_channels(config, fake_auth, "remote", directory=directory)
+        assert len(out) == 1
+        assert out[0]["source"] == "remote"
+        assert out[0]["subscribed"] is False
+
+    def test_subscription_only_local_match(self, config, fake_auth):
+        from api.service import search_channels
+
+        dp = config.downloader.download_path
+        db.add_subscription(dp, "subonly")
+        directory = _dir_stub()
+        out = search_channels(config, fake_auth, "subonly", directory=directory)
+        assert len(out) == 1
+        assert out[0]["slug"] == "subonly"
+        assert out[0]["source"] == "local"
+
+    def test_case_insensitive(self, config, fake_auth):
+        from api.service import search_channels
+
+        directory = _dir_stub(("jetlag", "Jetlag"))
+        out = search_channels(config, fake_auth, "JET", directory=directory)
+        assert [r["slug"] for r in out] == ["jetlag"]
+
+    def test_directory_failure_still_returns_local(self, config, fake_auth):
+        from api.service import search_channels
+
+        dp = config.downloader.download_path
+        _save_local_channel(dp, "jetlag", title="Jetlag")
+        directory = _dir_stub()  # simulate outage -> empty
+        out = search_channels(config, fake_auth, "jet", directory=directory)
+        assert [r["slug"] for r in out] == ["jetlag"]

@@ -364,3 +364,63 @@ def test_partials_subscriptions_renders_slug(config, fake_auth):
     resp = client.get("/partials/subscriptions")
     assert resp.status_code == 200
     assert "my-test-channel" in resp.text
+
+
+def test_search_route_returns_matches(config, fake_auth, mocker):
+    """GET /api/channels/search renders matched suggestions, no network."""
+    mock = mocker.patch(
+        "api.app.service.search_channels",
+        return_value=[
+            {"slug": "jetlag", "title": "Jetlag", "avatar_url": None,
+             "subscribed": False, "source": "remote"},
+            {"slug": "jet-lag-the-game", "title": "Jet Lag", "avatar_url": None,
+             "subscribed": False, "source": "remote"},
+        ],
+    )
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/api/channels/search", params={"q": "jet"})
+    assert resp.status_code == 200
+    assert "jetlag" in resp.text
+    assert "jet-lag-the-game" in resp.text
+    assert mock.call_args.args[2] == "jet"
+
+
+def test_search_route_empty_query(config, fake_auth, mocker):
+    """GET /api/channels/search with no q renders an empty dropdown."""
+    mocker.patch("api.app.service.search_channels", return_value=[])
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/api/channels/search")
+    assert resp.status_code == 200
+    assert "search-row" not in resp.text
+
+
+def test_search_route_subscribed_marker(config, fake_auth, mocker):
+    """A subscribed result shows the added marker."""
+    mocker.patch(
+        "api.app.service.search_channels",
+        return_value=[
+            {"slug": "jetlag", "title": "Jetlag", "avatar_url": None,
+             "subscribed": True, "source": "local"},
+        ],
+    )
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/api/channels/search", params={"q": "jet"})
+    assert resp.status_code == 200
+    assert "added" in resp.text
+
+
+def test_search_route_no_network(config, fake_auth, mocker):
+    """Route makes no live HTTP when the directory layer is stubbed empty."""
+    mocker.patch("api.app.service.get_channel_directory", return_value=[])
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/api/channels/search", params={"q": "jet"})
+    assert resp.status_code == 200
+
+
+def test_settings_input_has_search_wiring(config, fake_auth):
+    """Settings add-form input is wired for live search."""
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert 'hx-get="/api/channels/search"' in resp.text
+    assert 'id="slug-input"' in resp.text

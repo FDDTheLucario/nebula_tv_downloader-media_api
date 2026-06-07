@@ -197,6 +197,15 @@ def create_app(
             )
         )
 
+    @app.get("/api/channels/search", response_class=HTMLResponse)
+    async def search_channels_route(request: Request, q: str = Query("")):
+        """Render channel search suggestions for the add form."""
+        results = service.search_channels(config, auth, q)
+        template = env.get_template("partials/channel_search.html")
+        return HTMLResponse(
+            template.render({"request": request, "results": results, "q": q})
+        )
+
     @app.post("/api/channels/add", response_class=HTMLResponse)
     async def add_channel_route(slug: str = Form(...)):
         """Subscribe to a channel and trigger an immediate check."""

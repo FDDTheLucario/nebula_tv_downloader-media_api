@@ -28,7 +28,7 @@ def get_streaming_information_by_episode(
         response.elapsed.total_seconds(),
     )
     if response.status_code == HTTPStatus.OK:
-        return NebulaVideoContentStreamingResponseModel(**response.json())
+        return NebulaVideoContentStreamingResponseModel.model_validate(response.json())
     elif response.status_code == HTTPStatus.UNAUTHORIZED:
         logging.info(
             "The authorization token is invalid (got restricted), retrying in %s seconds... (status code: %s) (you should probably buy a new subscription or contact support)",

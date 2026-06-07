@@ -5,10 +5,19 @@
 
 <h3>Add a channel</h3>
 <form hx-post="/api/channels/add" hx-target="#sub-list" hx-swap="outerHTML" class="add-form">
-  <input type="text" name="slug" placeholder="channel-slug" required>
+  <div class="search-wrap">
+    <input type="text" id="slug-input" name="slug" placeholder="search or type a channel slug"
+           autocomplete="off" required
+           hx-get="/api/channels/search"
+           hx-trigger="keyup changed delay:250ms"
+           hx-target="#channel-search-results"
+           hx-swap="outerHTML"
+           hx-vals='js:{q: event.target.value}'>
+    <ul class="search-dropdown" id="channel-search-results"></ul>
+  </div>
   <button type="submit">Add</button>
 </form>
-<p class="hint">Enter the channel slug from its Nebula URL (nebula.tv/<b>slug</b>).</p>
+<p class="hint">Search by name or enter the channel slug from its Nebula URL (nebula.tv/<b>slug</b>).</p>
 
 <h3>Archived channels</h3>
 {% include "partials/subscriptions.html" %}
