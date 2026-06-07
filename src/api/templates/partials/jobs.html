@@ -1,7 +1,23 @@
 {% for job in jobs %}
-<tr>
-    <td>{{ job.episode_slug }}</td>
-    <td>{{ job.channel_slug }}</td>
+<tr data-slug="{{ job.episode_slug }}">
+    <td>
+        {% if job.episode and job.episode.thumbnail_url %}
+        <img class="thumb" src="{{ job.episode.thumbnail_url }}" alt="" loading="lazy">
+        {% endif %}
+    </td>
+    <td>
+        {% if job.episode and job.episode.url %}
+        <a href="{{ job.episode.url }}" target="_blank" rel="noopener">{{ job.episode.title or job.episode_slug }}</a>
+        {% else %}
+        {{ (job.episode.title if job.episode else None) or job.episode_slug }}
+        {% endif %}
+        {% for b in (job.episode.badges if job.episode else []) %}
+        <span class="badge badge-{{ b|lower }}">{{ b }}</span>
+        {% endfor %}
+    </td>
+    <td>{{ job.episode.channel_title if job.episode and job.episode.channel_title else job.channel_slug }}</td>
+    <td>{{ job.episode.duration_display if job.episode else "" }}</td>
+    <td>{{ job.episode.published_date if job.episode else "" }}</td>
     <td><span class="state-{{ job.state }}">{{ job.state }}</span></td>
     <td class="error-cell">{{ job.error or "-" }}</td>
     <td>

@@ -6,13 +6,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.requests import Request
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from api import service
+from api import presentation, service
 from api.worker import DownloadWorker
 from api.scheduler import CheckScheduler
 from config.config import Config
 from nebula_api.authorization import NebulaUserAuthorization
 from utils import jobs_db
-from utils.db import list_channel_slugs
+from utils.db import list_channels_with_info
 
 
 def create_app(
@@ -69,6 +69,14 @@ def create_app(
     app.state.config = config
     app.state.auth = auth
 
+    def _channels_view() -> list[dict]:
+        channels = list_channels_with_info(download_path)
+        for c in channels:
+            c["last_check"] = jobs_db.get_state(
+                download_path, f"last_check:{c['slug']}"
+            )
+        return channels
+
     # Routes
     @app.get("/healthz")
     async def healthz():
@@ -92,8 +100,8 @@ def create_app(
 
     @app.get("/api/channels")
     async def get_channels():
-        """Get list of saved channel slugs."""
-        return list_channel_slugs(download_path)
+        """Get list of saved channels with enriched info."""
+        return _channels_view()
 
     @app.get("/api/jobs")
     async def get_jobs(state: str | None = Query(None)):
@@ -122,8 +130,11 @@ def create_app(
         """Render the dashboard."""
         counts = jobs_db.count_jobs_by_state(download_path)
         last_check = jobs_db.get_state(download_path, "last_check")
-        channels = list_channel_slugs(download_path)
-        jobs = [dict(j) for j in jobs_db.list_jobs(download_path, limit=50)]
+        channels = _channels_view()
+        jobs = [
+            presentation.decorate_job(dict(j))
+            for j in jobs_db.list_jobs(download_path, limit=50)
+        ]
         context = {
             "request": request,
             "counts": counts,
@@ -138,7 +149,10 @@ def create_app(
     @app.get("/partials/jobs", response_class=HTMLResponse)
     async def partials_jobs(request: Request):
         """Render the jobs table rows."""
-        jobs = [dict(j) for j in jobs_db.list_jobs(download_path, limit=50)]
+        jobs = [
+            presentation.decorate_job(dict(j))
+            for j in jobs_db.list_jobs(download_path, limit=50)
+        ]
         context = {
             "request": request,
             "jobs": jobs,

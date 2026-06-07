@@ -73,7 +73,9 @@ def save_channel_info(
             published_year = None
             if episode.published_at:
                 try:
-                    published_year = datetime.fromisoformat(episode.published_at.replace("Z", "+00:00")).year
+                    published_year = datetime.fromisoformat(
+                        episode.published_at.replace("Z", "+00:00")
+                    ).year
                 except (ValueError, AttributeError):
                     pass
 
@@ -92,13 +94,17 @@ def save_channel_info(
 def load_channel_info(
     channel_slug: str, output_directory: Path
 ) -> NebulaChannelVideoContentResponseModel:
-    logging.info("Loading channel info for `%s` from %s", channel_slug, output_directory)
+    logging.info(
+        "Loading channel info for `%s` from %s", channel_slug, output_directory
+    )
 
     with closing(_connect(output_directory)) as conn:
         cursor = conn.cursor()
 
         # Load channel
-        cursor.execute("SELECT details_json FROM channels WHERE slug = ?", (channel_slug,))
+        cursor.execute(
+            "SELECT details_json FROM channels WHERE slug = ?", (channel_slug,)
+        )
         row = cursor.fetchone()
 
         if row is None:
@@ -135,3 +141,64 @@ def list_channel_slugs(output_directory: Path) -> list[str]:
         cursor.execute("SELECT slug FROM channels ORDER BY slug")
         rows = cursor.fetchall()
         return [row[0] for row in rows]
+
+
+def list_channels_with_info(output_directory: Path) -> list[dict]:
+    """Per saved channel, return a dict:
+      {slug, title, description, avatar_url, url, website,
+       episode_count, published_at}
+    Sorted by title (case-insensitive), then slug. [] if no channels.
+    avatar_url: from any one of the channel's episodes
+    (images.channel_avatar.src); None if the channel has no episodes.
+    url: canonical Nebula channel page f"https://nebula.tv/{slug}".
+    website: details_json 'website' (creator's own site) or None.
+    """
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT slug, details_json FROM channels")
+        rows = cursor.fetchall()
+
+        result = []
+        for slug, details_json_str in rows:
+            details = json.loads(details_json_str)
+            title = details.get("title", slug)
+            description = details.get("description")
+            published_at = details.get("published_at")
+            website = details.get("website")
+            url = f"https://nebula.tv/{slug}"
+
+            cursor.execute(
+                "SELECT COUNT(*) FROM episodes WHERE channel_slug = ?", (slug,)
+            )
+            episode_count = cursor.fetchone()[0]
+
+            cursor.execute(
+                "SELECT episode_json FROM episodes WHERE channel_slug = ? LIMIT 1",
+                (slug,),
+            )
+            ep_row = cursor.fetchone()
+            avatar_url = None
+            if ep_row:
+                try:
+                    ep_data = json.loads(ep_row[0])
+                    avatar_url = (
+                        ep_data.get("images", {}).get("channel_avatar", {}).get("src")
+                    )
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+
+            result.append(
+                {
+                    "slug": slug,
+                    "title": title,
+                    "description": description,
+                    "avatar_url": avatar_url,
+                    "url": url,
+                    "website": website,
+                    "episode_count": episode_count,
+                    "published_at": published_at,
+                }
+            )
+
+        result.sort(key=lambda c: (c["title"].lower(), c["slug"]))
+        return result

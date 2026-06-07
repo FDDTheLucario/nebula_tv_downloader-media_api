@@ -24,7 +24,9 @@ def _channel(**overrides):
 
 
 def _episodes(*episodes):
-    return NebulaChannelVideoContentEpisodes(next=None, previous=None, results=list(episodes))
+    return NebulaChannelVideoContentEpisodes(
+        next=None, previous=None, results=list(episodes)
+    )
 
 
 def _episode(**overrides):
@@ -96,7 +98,10 @@ def test_save_writes_one_row_per_episode(tmp_path):
     conn = _connect(tmp_path)
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT episode_json, published_year FROM episodes WHERE channel_slug = ?", ("ch-slug",))
+        cursor.execute(
+            "SELECT episode_json, published_year FROM episodes WHERE channel_slug = ?",
+            ("ch-slug",),
+        )
         rows = cursor.fetchall()
         assert len(rows) == 2
         for row in rows:
@@ -121,7 +126,9 @@ def test_save_empty_episode_list(tmp_path):
     conn = _connect(tmp_path)
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM episodes WHERE channel_slug = ?", ("ch-slug",))
+        cursor.execute(
+            "SELECT COUNT(*) FROM episodes WHERE channel_slug = ?", ("ch-slug",)
+        )
         count = cursor.fetchone()[0]
         assert count == 0
 
@@ -278,6 +285,7 @@ def test_roundtrip_preserves_nested_model_fields(tmp_path):
 # Test 14a: list_channel_slugs on empty db returns empty list
 def test_list_channel_slugs_empty_db(tmp_path):
     from utils.db import list_channel_slugs
+
     result = list_channel_slugs(tmp_path)
     assert result == []
 
@@ -285,6 +293,7 @@ def test_list_channel_slugs_empty_db(tmp_path):
 # Test 14b: list_channel_slugs returns all slugs sorted
 def test_list_channel_slugs_returns_sorted_slugs(tmp_path):
     from utils.db import list_channel_slugs
+
     save_channel_info(
         channel_slug="zulu-ch",
         channel_data=_channel(slug="zulu-ch"),
@@ -327,7 +336,9 @@ def test_save_is_atomic_on_failure(tmp_path):
             # Fail on first episode INSERT (call 3)
             if "INSERT INTO episodes" in sql and self._call_count[0] == 3:
                 self._failed[0] = True
-                raise sqlite3.OperationalError("Simulated INSERT failure during episode save")
+                raise sqlite3.OperationalError(
+                    "Simulated INSERT failure during episode save"
+                )
             return self._real.execute(sql, params)
 
         def fetchall(self):
@@ -395,3 +406,70 @@ def test_save_is_atomic_on_failure(tmp_path):
     response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
     assert len(response.episodes.results) == 2
     assert response.details.title == "Channel"  # Original title unchanged
+
+
+# ── list_channels_with_info ──────────────────────────────────────────────────
+
+
+def test_list_channels_with_info_empty(tmp_path):
+    from utils.db import list_channels_with_info
+
+    result = list_channels_with_info(tmp_path)
+    assert result == []
+
+
+def test_list_channels_with_info_returns_details(tmp_path):
+    from utils.db import list_channels_with_info
+
+    save_channel_info(
+        channel_slug="test-channel",
+        channel_data=_channel(slug="test-channel", title="Channel", description="Desc"),
+        episodes_data=_episodes(_episode(slug="ep1"), _episode(slug="ep2")),
+        output_directory=tmp_path,
+    )
+
+    result = list_channels_with_info(tmp_path)
+    assert len(result) == 1
+    entry = result[0]
+    assert entry["slug"] == "test-channel"
+    assert entry["title"] == "Channel"
+    assert entry["episode_count"] == 2
+    assert entry["avatar_url"] == "https://example.com/img.jpg"
+    assert entry["url"] == "https://nebula.tv/test-channel"
+
+
+def test_list_channels_with_info_zero_episodes_avatar_none(tmp_path):
+    from utils.db import list_channels_with_info
+
+    save_channel_info(
+        channel_slug="ch-slug",
+        channel_data=_channel(),
+        episodes_data=_episodes(),
+        output_directory=tmp_path,
+    )
+
+    result = list_channels_with_info(tmp_path)
+    assert len(result) == 1
+    entry = result[0]
+    assert entry["episode_count"] == 0
+    assert entry["avatar_url"] is None
+
+
+def test_list_channels_with_info_sorted_by_title(tmp_path):
+    from utils.db import list_channels_with_info
+
+    save_channel_info(
+        channel_slug="z-slug",
+        channel_data=_channel(slug="z-slug", title="Zebra"),
+        episodes_data=_episodes(),
+        output_directory=tmp_path,
+    )
+    save_channel_info(
+        channel_slug="a-slug",
+        channel_data=_channel(slug="a-slug", title="Apple"),
+        episodes_data=_episodes(),
+        output_directory=tmp_path,
+    )
+
+    result = list_channels_with_info(tmp_path)
+    assert [c["title"] for c in result] == ["Apple", "Zebra"]

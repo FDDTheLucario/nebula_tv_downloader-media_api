@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from tests.api.conftest import make_content, make_episode
 from utils import jobs_db
 from utils.db import save_channel_info
 
@@ -40,7 +41,7 @@ def test_status_reflects_jobs(config, fake_auth):
 
 
 def test_channels_endpoint_lists_saved_channels(config, fake_auth):
-    """GET /api/channels lists saved channels."""
+    """GET /api/channels lists saved channels as enriched dicts."""
     from tests.api.conftest import make_content, make_episode
 
     download_path = config.downloader.download_path
@@ -57,8 +58,11 @@ def test_channels_endpoint_lists_saved_channels(config, fake_auth):
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/api/channels")
     assert resp.status_code == 200
-    slugs = resp.json()
-    assert "test-channel" in slugs
+    channels = resp.json()
+    assert any(c["slug"] == "test-channel" for c in channels)
+    entry = next(c for c in channels if c["slug"] == "test-channel")
+    assert "title" in entry
+    assert "episode_count" in entry
 
 
 def test_jobs_endpoint_returns_jobs(config, fake_auth):
@@ -148,3 +152,74 @@ def test_partials_jobs_renders_rows(config, fake_auth):
     resp = client.get("/partials/jobs")
     assert resp.status_code == 200
     assert "test-ep-slug" in resp.text
+
+
+def test_channels_endpoint_includes_last_check(config, fake_auth):
+    """GET /api/channels includes per-channel last_check from app_state."""
+    download_path = config.downloader.download_path
+    ep = make_episode()
+    content = make_content(ep)
+    save_channel_info("test-channel", content.details, content.episodes, download_path)
+    jobs_db.set_state(download_path, "last_check:test-channel", "2026-06-07T00:00:00")
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/api/channels")
+    assert resp.status_code == 200
+    channels = resp.json()
+    entry = next(c for c in channels if c["slug"] == "test-channel")
+    assert entry["last_check"] == "2026-06-07T00:00:00"
+
+
+def test_dashboard_shows_channel_title_and_count(config, fake_auth):
+    """GET / shows channel title, episode count, and channel link."""
+    download_path = config.downloader.download_path
+    ep1 = make_episode(slug="ep1")
+    ep2 = make_episode(slug="ep2")
+    content = make_content(ep1, ep2)
+    save_channel_info("ch-slug", content.details, content.episodes, download_path)
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "Channel" in resp.text
+    assert "2" in resp.text
+    assert "https://nebula.tv/ch-slug" in resp.text
+
+
+def test_dashboard_shows_video_title_and_duration(config, fake_auth):
+    """GET / shows video title and formatted duration in job rows."""
+    download_path = config.downloader.download_path
+    ep = make_episode(title="My Video", duration=125)
+    jobs_db.enqueue_job(download_path, "ch", "ep", ep.model_dump_json())
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "My Video" in resp.text
+    assert "2:05" in resp.text
+
+
+def test_partials_jobs_shows_badge_and_thumbnail(config, fake_auth):
+    """GET /partials/jobs shows badges, thumbnail, and watch link."""
+    download_path = config.downloader.download_path
+    ep = make_episode(attributes=["is_nebula_plus"])
+    jobs_db.enqueue_job(download_path, "ch", "ep", ep.model_dump_json())
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/partials/jobs")
+    assert resp.status_code == 200
+    assert "Plus" in resp.text
+    assert "https://example.com/img.jpg" in resp.text
+    assert "https://nebula.tv/ep" in resp.text
+
+
+def test_partials_jobs_malformed_episode_json_renders_slug(config, fake_auth):
+    """GET /partials/jobs with non-dict episode_json returns 200 and falls back to slug."""
+    download_path = config.downloader.download_path
+    # Enqueue a job where episode_json is valid JSON but not a dict (a list)
+    jobs_db.enqueue_job(download_path, "ch", "bad-ep-slug", "[]")
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/partials/jobs")
+    assert resp.status_code == 200
+    assert "bad-ep-slug" in resp.text

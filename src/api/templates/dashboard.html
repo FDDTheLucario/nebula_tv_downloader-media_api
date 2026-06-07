@@ -29,9 +29,16 @@
 <button hx-post="/api/check" hx-swap="none">Check now</button>
 
 <h2>Channels</h2>
-<div class="channels">
-    {% for channel in channels %}
-    <div class="channel-tag">{{ channel }}</div>
+<div class="channel-grid">
+    {% for c in channels %}
+    <div class="channel-card">
+        {% if c.avatar_url %}<img class="avatar" src="{{ c.avatar_url }}" alt="" loading="lazy">{% endif %}
+        <div class="channel-meta">
+            <div class="channel-title"><a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title or c.slug }}</a></div>
+            <div class="channel-sub">{{ c.episode_count }} videos</div>
+            <div class="channel-sub">{% if c.last_check %}Checked {{ c.last_check[:16] }}{% else %}Never checked{% endif %}</div>
+        </div>
+    </div>
     {% endfor %}
 </div>
 
@@ -39,8 +46,11 @@
 <table>
     <thead>
         <tr>
-            <th>Episode</th>
+            <th>Thumbnail</th>
+            <th>Title</th>
             <th>Channel</th>
+            <th>Duration</th>
+            <th>Published</th>
             <th>State</th>
             <th>Error</th>
             <th>Action</th>
