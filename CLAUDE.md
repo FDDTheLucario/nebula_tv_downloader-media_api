@@ -11,8 +11,8 @@ metadata, thumbnails, subtitles). Requires a paid Nebula subscription and API to
 
 ## Commands
 
-Dependencies are managed with **Pipenv** (`Pipfile`, `python_version = 3.14`). `requirements.txt`
-is stale/pinned-old — prefer Pipenv.
+Dependencies are managed with **Pipenv** (`Pipfile`, `python_version = 3.14`). Pipenv is the only
+supported workflow — there is no `requirements.txt`.
 
 ```bash
 pipenv install                       # install deps into virtualenv
