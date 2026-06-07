@@ -1,9 +1,10 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
 from tests.api.conftest import make_content, make_episode
-from utils import jobs_db
-from utils.db import save_channel_info
+from utils import db, jobs_db
+from utils.db import ChannelNotFoundError, load_channel_info, save_channel_info
 
 
 def test_healthz(config, fake_auth):
@@ -223,3 +224,143 @@ def test_partials_jobs_malformed_episode_json_renders_slug(config, fake_auth):
     resp = client.get("/partials/jobs")
     assert resp.status_code == 200
     assert "bad-ep-slug" in resp.text
+
+
+# ── settings page tests ───────────────────────────────────────────────────────
+
+
+def test_settings_page_renders(config, fake_auth):
+    """GET /settings returns 200 with Settings heading and add-channel form."""
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert "Settings" in resp.text
+    assert "/api/channels/add" in resp.text
+
+
+def test_settings_lists_subscriptions(config, fake_auth):
+    """GET /settings lists subscribed channel slugs."""
+    download_path = config.downloader.download_path
+    db.add_subscription(download_path, "ch-a")
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert "ch-a" in resp.text
+
+
+def test_add_channel_route_subscribes(config, fake_auth, mocker):
+    """POST /api/channels/add subscribes the channel (no network)."""
+    download_path = config.downloader.download_path
+    mock_add = mocker.patch(
+        "api.app.service.add_channel",
+        side_effect=lambda cfg, a, s: db.add_subscription(
+            cfg.downloader.download_path, s
+        ),
+    )
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.post("/api/channels/add", data={"slug": "new-ch"})
+    assert resp.status_code == 200
+    assert db.is_subscribed(download_path, "new-ch") is True
+    assert "new-ch" in resp.text
+    mock_add.assert_called_once()
+
+
+def test_remove_channel_route_keeps_data(config, fake_auth):
+    """POST /api/channels/remove without delete_data keeps channel data."""
+    download_path = config.downloader.download_path
+    download_path.mkdir(parents=True, exist_ok=True)
+    ep = make_episode(slug="ep1")
+    content = make_content(ep)
+    save_channel_info("rm-ch", content.details, content.episodes, download_path)
+    db.add_subscription(download_path, "rm-ch")
+    jobs_db.enqueue_job(download_path, "rm-ch", "ep1", '{"slug":"ep1"}')
+    jobs_db.set_state(download_path, "last_check:rm-ch", "2026-06-07T00:00:00")
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.post("/api/channels/remove", data={"slug": "rm-ch"})
+    assert resp.status_code == 200
+    assert db.is_subscribed(download_path, "rm-ch") is False
+    loaded = load_channel_info("rm-ch", download_path)
+    assert len(loaded.episodes.results) == 1
+    remaining_jobs = [
+        j for j in jobs_db.list_jobs(download_path) if j["channel_slug"] == "rm-ch"
+    ]
+    assert len(remaining_jobs) > 0
+    assert jobs_db.get_state(download_path, "last_check:rm-ch") == "2026-06-07T00:00:00"
+
+
+def test_remove_channel_route_delete_data_purges(config, fake_auth):
+    """POST /api/channels/remove with delete_data=true purges channel data."""
+    download_path = config.downloader.download_path
+    download_path.mkdir(parents=True, exist_ok=True)
+    ep = make_episode(slug="ep1")
+    content = make_content(ep)
+    save_channel_info("rm-ch", content.details, content.episodes, download_path)
+    db.add_subscription(download_path, "rm-ch")
+    jobs_db.enqueue_job(download_path, "rm-ch", "ep1", '{"slug":"ep1"}')
+    jobs_db.set_state(download_path, "last_check:rm-ch", "2026-06-07T00:00:00")
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.post(
+        "/api/channels/remove", data={"slug": "rm-ch", "delete_data": "true"}
+    )
+    assert resp.status_code == 200
+    with pytest.raises(ChannelNotFoundError):
+        load_channel_info("rm-ch", download_path)
+    remaining_jobs = [
+        j for j in jobs_db.list_jobs(download_path) if j["channel_slug"] == "rm-ch"
+    ]
+    assert remaining_jobs == []
+    assert jobs_db.get_state(download_path, "last_check:rm-ch") is None
+
+
+def test_dashboard_has_settings_link(config, fake_auth):
+    """GET / dashboard contains a link to /settings."""
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert 'href="/settings"' in resp.text
+
+
+# ── lifespan / background-startup tests ──────────────────────────────────────
+
+
+def test_lifespan_starts_and_stops_background(config, fake_auth, mocker):
+    """With start_background=True the worker and scheduler are started then stopped."""
+    mock_worker_cls = mocker.patch("api.app.DownloadWorker")
+    mock_sched_cls = mocker.patch("api.app.CheckScheduler")
+
+    app = create_app(config, fake_auth, start_background=True)
+    with TestClient(app):
+        mock_worker_cls.return_value.start.assert_called_once()
+        mock_sched_cls.return_value.start.assert_called_once()
+
+    mock_worker_cls.return_value.stop.assert_called_once()
+    mock_sched_cls.return_value.shutdown.assert_called_once()
+
+
+def test_post_check_uses_scheduler_when_present(config, fake_auth, mocker):
+    """POST /api/check delegates to scheduler.trigger_now() when scheduler is on app state."""
+    mocker.patch("api.app.DownloadWorker")
+    mock_sched_cls = mocker.patch("api.app.CheckScheduler")
+    mock_sched_cls.return_value.trigger_now.return_value = {"ch-slug": 3}
+
+    app = create_app(config, fake_auth, start_background=True)
+    with TestClient(app) as client:
+        resp = client.post("/api/check")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"enqueued": {"ch-slug": 3}}
+
+
+def test_partials_subscriptions_renders_slug(config, fake_auth):
+    """GET /partials/subscriptions returns 200 and includes the subscribed slug."""
+    download_path = config.downloader.download_path
+    db.add_subscription(download_path, "my-test-channel")
+
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/partials/subscriptions")
+    assert resp.status_code == 200
+    assert "my-test-channel" in resp.text

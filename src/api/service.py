@@ -12,7 +12,7 @@ from nebula_api.video_feed import get_all_channels_slugs_from_video_feed
 from nebula_api.authorization import NebulaUserAuthorization
 from utils.db import save_channel_info
 from utils.filtering import filter_out_episodes
-from utils import jobs_db
+from utils import db, jobs_db
 
 
 def _now() -> str:
@@ -114,8 +114,12 @@ def resolve_channels(
     feed=get_all_channels_slugs_from_video_feed,
 ) -> list[str]:
     """
-    Resolve channels from config or by fetching from the video feed.
+    Resolve channels: subscriptions table first, then config list, then feed.
     """
+    subs = db.list_subscriptions(config.downloader.download_path)
+    if subs:
+        return subs
+
     if config.nebula_filters.channels_to_parse:
         return config.nebula_filters.channels_to_parse
 
@@ -143,6 +147,68 @@ def check_all_channels(config: Config, auth: NebulaUserAuthorization) -> dict[st
     )
 
     return result
+
+
+def add_channel(
+    config: Config,
+    auth: NebulaUserAuthorization,
+    slug: str,
+    *,
+    check=check_channel,
+) -> dict:
+    """Subscribe to slug, then check it once (validate + populate).
+    - slug stripped; empty → ValueError.
+    - db.add_subscription(...) (new flag captured).
+    - try: enqueued = check(slug, config, auth); error = None
+      except Exception as e: enqueued = None; error = str(e)
+        (subscription is NOT rolled back — slug stays).
+    Return {"slug", "added": bool, "enqueued": int|None, "error": str|None}.
+    """
+    slug = slug.strip()
+    if not slug:
+        raise ValueError("slug required")
+    added = db.add_subscription(config.downloader.download_path, slug)
+    try:
+        enqueued = check(slug, config, auth)
+        error = None
+    except Exception as exc:
+        enqueued = None
+        error = str(exc)
+    return {"slug": slug, "added": added, "enqueued": enqueued, "error": error}
+
+
+def remove_channel(
+    config: Config,
+    slug: str,
+    *,
+    delete_data: bool = False,
+) -> dict:
+    """Unsubscribe from slug. Keep data unless delete_data.
+    Return {"slug", "removed": bool, "data_deleted": bool}.
+    """
+    download_path = config.downloader.download_path
+    removed = db.remove_subscription(download_path, slug)
+    if delete_data:
+        db.delete_channel_data(download_path, slug)
+        jobs_db.delete_jobs_for_channel(download_path, slug)
+        jobs_db.delete_state(download_path, f"last_check:{slug}")
+    return {"slug": slug, "removed": removed, "data_deleted": delete_data}
+
+
+def seed_subscriptions_from_config(config: Config) -> int:
+    """If subscriptions table is empty AND config.nebula_filters.channels_to_parse
+    is set, add each slug. Idempotent: no-op when subscriptions already exist.
+    Return count seeded.
+    """
+    download_path = config.downloader.download_path
+    if db.list_subscriptions(download_path):
+        return 0
+    slugs = config.nebula_filters.channels_to_parse or []
+    count = 0
+    for slug in slugs:
+        if db.add_subscription(download_path, slug):
+            count += 1
+    return count
 
 
 def process_job(

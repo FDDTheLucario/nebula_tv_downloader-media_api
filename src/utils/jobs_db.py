@@ -294,3 +294,22 @@ def get_state(output_directory: Path, key: str) -> str | None:
         cursor.execute("SELECT value FROM app_state WHERE key = ?", (key,))
         row = cursor.fetchone()
         return row[0] if row else None
+
+
+def delete_jobs_for_channel(output_directory: Path, channel_slug: str) -> int:
+    """Delete all download_jobs rows for channel_slug. Return count deleted."""
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM download_jobs WHERE channel_slug = ?", (channel_slug,)
+        )
+        conn.commit()
+        return cursor.rowcount
+
+
+def delete_state(output_directory: Path, key: str) -> None:
+    """Delete a key from app_state. No-op if absent."""
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM app_state WHERE key = ?", (key,))
+        conn.commit()

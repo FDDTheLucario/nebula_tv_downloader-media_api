@@ -1,3 +1,5 @@
+import runpy
+
 from fastapi import FastAPI
 
 from serve import build
@@ -40,3 +42,28 @@ def test_build_creates_app(monkeypatch, config, fake_auth):
     assert "/healthz" in routes
     assert "/api/status" in routes
     assert "/api/channels" in routes
+
+
+def test_main_runs_uvicorn(mocker):
+    """main() passes the built app to uvicorn.run."""
+    import serve
+
+    mock_app = mocker.MagicMock()
+    mocker.patch("serve.build", return_value=mock_app)
+    mock_run = mocker.patch("uvicorn.run")
+
+    serve.main(host="127.0.0.1", port=9999)
+
+    mock_run.assert_called_once_with(mock_app, host="127.0.0.1", port=9999)
+
+
+def test_main_entry_point(mocker):
+    """Executing serve as __main__ invokes main() which calls uvicorn.run."""
+    mocker.patch("config.config.Config")
+    mocker.patch("nebula_api.authorization.NebulaUserAuthorization")
+    mocker.patch("api.app.create_app")
+    mock_run = mocker.patch("uvicorn.run")
+
+    runpy.run_module("serve", run_name="__main__")
+
+    mock_run.assert_called_once()

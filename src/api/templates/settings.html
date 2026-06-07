@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Settings</h2>
+<a href="/">&larr; Dashboard</a>
+
+<h3>Add a channel</h3>
+<form hx-post="/api/channels/add" hx-target="#sub-list" hx-swap="outerHTML" class="add-form">
+  <input type="text" name="slug" placeholder="channel-slug" required>
+  <button type="submit">Add</button>
+</form>
+<p class="hint">Enter the channel slug from its Nebula URL (nebula.tv/<b>slug</b>).</p>
+
+<h3>Archived channels</h3>
+{% include "partials/subscriptions.html" %}
+{% endblock %}

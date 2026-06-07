@@ -15,6 +15,11 @@ from models.nebula.fetched import (
 DB_FILENAME = "nebula.db"
 
 
+def _now() -> str:
+    """Return current timestamp in ISO format."""
+    return datetime.now().isoformat()
+
+
 class ChannelNotFoundError(LookupError):
     pass
 
@@ -39,6 +44,12 @@ def _connect(output_directory: Path) -> sqlite3.Connection:
             episode_json    TEXT NOT NULL,
             PRIMARY KEY (channel_slug, slug),
             FOREIGN KEY (channel_slug) REFERENCES channels(slug) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            slug      TEXT PRIMARY KEY,
+            added_at  TEXT
         )
     """)
     conn.commit()
@@ -202,3 +213,56 @@ def list_channels_with_info(output_directory: Path) -> list[dict]:
 
         result.sort(key=lambda c: (c["title"].lower(), c["slug"]))
         return result
+
+
+def add_subscription(output_directory: Path, slug: str) -> bool:
+    """Insert slug into subscriptions. Return True if newly added,
+    False if it was already present. Empty/whitespace slug → ValueError."""
+    slug = slug.strip()
+    if not slug:
+        raise ValueError("slug required")
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO subscriptions (slug, added_at) VALUES (?, ?)",
+            (slug, _now()),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def remove_subscription(output_directory: Path, slug: str) -> bool:
+    """Delete slug from subscriptions. Return True if a row was removed,
+    False if the slug was not subscribed. Does NOT touch channels/episodes."""
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM subscriptions WHERE slug = ?", (slug,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def list_subscriptions(output_directory: Path) -> list[str]:
+    """Return all subscribed slugs, sorted alphabetically. [] if none."""
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT slug FROM subscriptions ORDER BY slug")
+        return [row[0] for row in cursor.fetchall()]
+
+
+def is_subscribed(output_directory: Path, slug: str) -> bool:
+    """True if slug is in subscriptions."""
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM subscriptions WHERE slug = ?", (slug,))
+        return cursor.fetchone() is not None
+
+
+def delete_channel_data(output_directory: Path, slug: str) -> bool:
+    """Delete the channels row for slug (episodes cascade). Return True if a
+    channels row existed and was deleted, else False. Does NOT touch the
+    subscriptions table, download_jobs, app_state, or any files on disk."""
+    with closing(_connect(output_directory)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM channels WHERE slug = ?", (slug,))
+        conn.commit()
+        return cursor.rowcount > 0

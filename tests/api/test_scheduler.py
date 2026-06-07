@@ -61,3 +61,39 @@ class TestCheckScheduler:
         scheduler._run()
 
         failing_check.assert_called_once()
+
+    def test_run_logs_success(self, config, fake_auth):
+        """_run() calls the check and logs the result when check succeeds."""
+        successful_check = Mock(return_value={"ch-slug": 2})
+
+        scheduler = CheckScheduler(
+            config, fake_auth, check=successful_check, scheduler_factory=Mock
+        )
+
+        scheduler._run()  # must not raise
+
+        successful_check.assert_called_once_with(config, fake_auth)
+
+    def test_next_run_time_is_none_before_start(self, config, fake_auth):
+        """next_run_time returns None when the scheduler has not been started."""
+        scheduler = CheckScheduler(config, fake_auth)
+
+        assert scheduler.next_run_time is None
+
+    def test_next_run_time_returns_job_next_run_time(self, config, fake_auth):
+        """next_run_time delegates to the underlying job's next_run_time after start."""
+        from datetime import datetime
+
+        sentinel = datetime(2026, 1, 1, 12, 0, 0)
+        fake_job = Mock()
+        fake_job.next_run_time = sentinel
+        fake_scheduler = Mock()
+        fake_scheduler.get_job.return_value = fake_job
+
+        scheduler = CheckScheduler(
+            config, fake_auth, scheduler_factory=lambda: fake_scheduler
+        )
+        scheduler.start()
+
+        assert scheduler.next_run_time == sentinel
+        fake_scheduler.get_job.assert_called_with("check_channels")

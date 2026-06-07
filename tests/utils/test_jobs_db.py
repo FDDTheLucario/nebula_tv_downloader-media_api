@@ -340,3 +340,36 @@ def test_set_state_upsert_overwrites(tmp_path):
 
     set_state(tmp_path, "key", "value2")
     assert get_state(tmp_path, "key") == "value2"
+
+
+# ── new cleanup helpers ───────────────────────────────────────────────────────
+
+from utils.jobs_db import delete_jobs_for_channel, delete_state  # noqa: E402
+
+
+def test_delete_jobs_for_channel_removes_only_that_channel(tmp_path):
+    ep_json = json.dumps({"slug": "ep1"})
+    enqueue_job(tmp_path, "ch1", "ep1", ep_json)
+    enqueue_job(tmp_path, "ch1", "ep2", json.dumps({"slug": "ep2"}))
+    enqueue_job(tmp_path, "ch2", "ep3", json.dumps({"slug": "ep3"}))
+
+    count = delete_jobs_for_channel(tmp_path, "ch1")
+    assert count == 2
+
+    remaining = list_jobs(tmp_path)
+    assert len(remaining) == 1
+    assert remaining[0]["channel_slug"] == "ch2"
+
+
+def test_delete_jobs_for_channel_none_returns_zero(tmp_path):
+    assert delete_jobs_for_channel(tmp_path, "ghost") == 0
+
+
+def test_delete_state_removes_key(tmp_path):
+    set_state(tmp_path, "last_check:ch", "x")
+    delete_state(tmp_path, "last_check:ch")
+    assert get_state(tmp_path, "last_check:ch") is None
+
+
+def test_delete_state_missing_key_noop(tmp_path):
+    delete_state(tmp_path, "nope")  # must not raise

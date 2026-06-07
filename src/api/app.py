@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Form, Query
 from fastapi.responses import HTMLResponse
 from fastapi.requests import Request
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -11,7 +11,7 @@ from api.worker import DownloadWorker
 from api.scheduler import CheckScheduler
 from config.config import Config
 from nebula_api.authorization import NebulaUserAuthorization
-from utils import jobs_db
+from utils import db, jobs_db
 from utils.db import list_channels_with_info
 
 
@@ -43,6 +43,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         # Startup
         if start_background:
+            service.seed_subscriptions_from_config(config)
             jobs_db.reset_running_jobs(download_path)
             worker = DownloadWorker(config, auth)
             worker.start()
@@ -76,6 +77,28 @@ def create_app(
                 download_path, f"last_check:{c['slug']}"
             )
         return channels
+
+    def _subscriptions_view() -> list[dict]:
+        subs = db.list_subscriptions(download_path)
+        info_by_slug = {c["slug"]: c for c in list_channels_with_info(download_path)}
+        rows = []
+        for slug in subs:
+            info = info_by_slug.get(slug)
+            rows.append(
+                {
+                    "slug": slug,
+                    "subscribed": True,
+                    "title": (info or {}).get("title", slug),
+                    "avatar_url": (info or {}).get("avatar_url"),
+                    "url": (info or {}).get("url", f"https://nebula.tv/{slug}"),
+                    "episode_count": (info or {}).get("episode_count", 0),
+                    "last_check": jobs_db.get_state(
+                        download_path, f"last_check:{slug}"
+                    ),
+                    "has_data": info is not None,
+                }
+            )
+        return rows
 
     # Routes
     @app.get("/healthz")
@@ -160,5 +183,41 @@ def create_app(
         template = env.get_template("partials/jobs.html")
         html = template.render(context)
         return HTMLResponse(content=html)
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request):
+        """Render the settings page."""
+        template = env.get_template("settings.html")
+        return HTMLResponse(
+            template.render(
+                {
+                    "request": request,
+                    "subscriptions": _subscriptions_view(),
+                }
+            )
+        )
+
+    @app.post("/api/channels/add", response_class=HTMLResponse)
+    async def add_channel_route(slug: str = Form(...)):
+        """Subscribe to a channel and trigger an immediate check."""
+        service.add_channel(config, auth, slug)
+        template = env.get_template("partials/subscriptions.html")
+        return HTMLResponse(template.render({"subscriptions": _subscriptions_view()}))
+
+    @app.post("/api/channels/remove", response_class=HTMLResponse)
+    async def remove_channel_route(
+        slug: str = Form(...),
+        delete_data: bool = Form(False),
+    ):
+        """Unsubscribe from a channel, optionally purging DB data."""
+        service.remove_channel(config, slug, delete_data=delete_data)
+        template = env.get_template("partials/subscriptions.html")
+        return HTMLResponse(template.render({"subscriptions": _subscriptions_view()}))
+
+    @app.get("/partials/subscriptions", response_class=HTMLResponse)
+    async def partials_subscriptions(request: Request):
+        """Render the subscriptions partial."""
+        template = env.get_template("partials/subscriptions.html")
+        return HTMLResponse(template.render({"subscriptions": _subscriptions_view()}))
 
     return app

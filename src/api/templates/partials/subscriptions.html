@@ -1,0 +1,25 @@
+<ul class="sub-list" id="sub-list">
+  {% for c in subscriptions %}
+  <li class="sub-row" data-slug="{{ c.slug }}">
+    {% if c.avatar_url %}<img class="avatar" src="{{ c.avatar_url }}" alt="" loading="lazy">{% endif %}
+    <div class="sub-meta">
+      <div class="channel-title">
+        <a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title or c.slug }}</a>
+      </div>
+      <div class="channel-sub">
+        {{ c.episode_count }} videos
+        {% if not c.has_data %}&middot; not yet checked{% endif %}
+      </div>
+    </div>
+    <form class="sub-remove" hx-post="/api/channels/remove" hx-target="#sub-list" hx-swap="outerHTML">
+      <input type="hidden" name="slug" value="{{ c.slug }}">
+      <label class="del-data">
+        <input type="checkbox" name="delete_data" value="true"> also remove data
+      </label>
+      <button type="submit">Remove</button>
+    </form>
+  </li>
+  {% else %}
+  <li class="sub-empty">No channels yet. Add one above.</li>
+  {% endfor %}
+</ul>

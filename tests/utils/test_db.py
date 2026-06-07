@@ -473,3 +473,113 @@ def test_list_channels_with_info_sorted_by_title(tmp_path):
 
     result = list_channels_with_info(tmp_path)
     assert [c["title"] for c in result] == ["Apple", "Zebra"]
+
+
+# ── subscriptions CRUD ────────────────────────────────────────────────────────
+
+from utils.db import (  # noqa: E402
+    add_subscription,
+    delete_channel_data,
+    is_subscribed,
+    list_subscriptions,
+    remove_subscription,
+)
+
+
+def test_add_subscription_new_returns_true(tmp_path):
+    result = add_subscription(tmp_path, "a")
+    assert result is True
+    assert list_subscriptions(tmp_path) == ["a"]
+
+
+def test_add_subscription_duplicate_returns_false(tmp_path):
+    add_subscription(tmp_path, "a")
+    result = add_subscription(tmp_path, "a")
+    assert result is False
+    assert list_subscriptions(tmp_path) == ["a"]
+
+
+def test_add_subscription_empty_raises(tmp_path):
+    with pytest.raises(ValueError):
+        add_subscription(tmp_path, "")
+    with pytest.raises(ValueError):
+        add_subscription(tmp_path, "  ")
+
+
+def test_list_subscriptions_sorted(tmp_path):
+    add_subscription(tmp_path, "z")
+    add_subscription(tmp_path, "a")
+    add_subscription(tmp_path, "m")
+    assert list_subscriptions(tmp_path) == ["a", "m", "z"]
+
+
+def test_list_subscriptions_empty(tmp_path):
+    assert list_subscriptions(tmp_path) == []
+
+
+def test_is_subscribed(tmp_path):
+    add_subscription(tmp_path, "a")
+    assert is_subscribed(tmp_path, "a") is True
+    assert is_subscribed(tmp_path, "b") is False
+
+
+def test_remove_subscription_present_returns_true(tmp_path):
+    add_subscription(tmp_path, "a")
+    result = remove_subscription(tmp_path, "a")
+    assert result is True
+    assert list_subscriptions(tmp_path) == []
+
+
+def test_remove_subscription_absent_returns_false(tmp_path):
+    result = remove_subscription(tmp_path, "ghost")
+    assert result is False
+
+
+def test_remove_subscription_keeps_channel_data(tmp_path):
+    save_channel_info(
+        channel_slug="a",
+        channel_data=_channel(slug="a"),
+        episodes_data=_episodes(_episode(slug="ep1"), _episode(slug="ep2")),
+        output_directory=tmp_path,
+    )
+    add_subscription(tmp_path, "a")
+    remove_subscription(tmp_path, "a")
+    loaded = load_channel_info("a", tmp_path)
+    assert len(loaded.episodes.results) == 2
+
+
+def test_delete_channel_data_removes_channel_and_episodes(tmp_path):
+    save_channel_info(
+        channel_slug="ch",
+        channel_data=_channel(slug="ch"),
+        episodes_data=_episodes(_episode(slug="ep1"), _episode(slug="ep2")),
+        output_directory=tmp_path,
+    )
+    result = delete_channel_data(tmp_path, "ch")
+    assert result is True
+    with pytest.raises(ChannelNotFoundError):
+        load_channel_info("ch", tmp_path)
+    conn = sqlite3.connect(str(tmp_path / "nebula.db"))
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM episodes WHERE channel_slug = 'ch'")
+        assert cursor.fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_delete_channel_data_absent_returns_false(tmp_path):
+    result = delete_channel_data(tmp_path, "never-saved")
+    assert result is False
+
+
+def test_delete_channel_data_keeps_subscription(tmp_path):
+    save_channel_info(
+        channel_slug="ch",
+        channel_data=_channel(slug="ch"),
+        episodes_data=_episodes(),
+        output_directory=tmp_path,
+    )
+    add_subscription(tmp_path, "ch")
+    delete_channel_data(tmp_path, "ch")
+    assert is_subscribed(tmp_path, "ch") is True
