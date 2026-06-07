@@ -1,9 +1,8 @@
 import sqlite3
 from contextlib import closing
 from datetime import datetime
-from pathlib import Path
 
-DB_FILENAME = "nebula.db"
+from utils.paths import get_db_path
 
 
 def _now() -> str:
@@ -16,10 +15,10 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     return dict(row)
 
 
-def _connect(output_directory: Path) -> sqlite3.Connection:
-    """Connect to nebula.db, create tables if needed, set row_factory."""
-    output_directory.mkdir(parents=True, exist_ok=True)
-    db_path = output_directory / DB_FILENAME
+def _connect() -> sqlite3.Connection:
+    """Connect to the global nebula.db, create tables if needed, set row_factory."""
+    db_path = get_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
 
@@ -46,16 +45,14 @@ def _connect(output_directory: Path) -> sqlite3.Connection:
     return conn
 
 
-def enqueue_job(
-    output_directory: Path, channel_slug: str, episode_slug: str, episode_json: str
-) -> bool:
+def enqueue_job(channel_slug: str, episode_slug: str, episode_json: str) -> bool:
     """
     Insert a queued job. Idempotent on (channel_slug, episode_slug).
     - If no row exists → insert, return True
     - If existing row state is 'failed' → reset to 'queued', clear error, return True
     - If existing state is 'queued'/'running'/'done' → leave untouched, return False
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         # Check if job exists
@@ -77,7 +74,7 @@ def enqueue_job(
             conn.commit()
             return True
 
-        job_id, state = row
+        job_id, state = row["id"], row["state"]
         if state == "failed":
             # Reset failed job to queued
             now = _now()
@@ -92,14 +89,14 @@ def enqueue_job(
         return False
 
 
-def claim_next_job(output_directory: Path) -> dict | None:
+def claim_next_job() -> dict | None:
     """
     Atomically pick the oldest queued job and flip it to running.
     Use BEGIN IMMEDIATE; SELECT id WHERE state='queued' ORDER BY id LIMIT 1;
     UPDATE that id → running + updated_at; COMMIT.
     Return the job as a dict (post-update state='running'), or None if none queued.
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         # Begin atomic transaction
@@ -141,9 +138,9 @@ def claim_next_job(output_directory: Path) -> dict | None:
             raise
 
 
-def mark_job_done(output_directory: Path, job_id: int) -> None:
+def mark_job_done(job_id: int) -> None:
     """Set job state to 'done' and update updated_at."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         now = _now()
         cursor.execute(
@@ -153,9 +150,9 @@ def mark_job_done(output_directory: Path, job_id: int) -> None:
         conn.commit()
 
 
-def mark_job_failed(output_directory: Path, job_id: int, error: str) -> None:
+def mark_job_failed(job_id: int, error: str) -> None:
     """Set job state to 'failed', set error, and update updated_at."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         now = _now()
         cursor.execute(
@@ -165,12 +162,12 @@ def mark_job_failed(output_directory: Path, job_id: int, error: str) -> None:
         conn.commit()
 
 
-def requeue_job(output_directory: Path, job_id: int) -> bool:
+def requeue_job(job_id: int) -> bool:
     """
     If job exists and state in {failed, done}: set queued, clear error, bump updated_at, return True.
     Else return False.
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         # Check if job exists and is in failed or done state
@@ -194,12 +191,12 @@ def requeue_job(output_directory: Path, job_id: int) -> bool:
         return True
 
 
-def reset_running_jobs(output_directory: Path) -> int:
+def reset_running_jobs() -> int:
     """
     Set every 'running' job back to 'queued' (crash recovery on startup).
     Return count of jobs reset.
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         # Count running jobs
@@ -217,14 +214,12 @@ def reset_running_jobs(output_directory: Path) -> int:
         return count
 
 
-def list_jobs(
-    output_directory: Path, state: str | None = None, limit: int = 200
-) -> list[dict]:
+def list_jobs(state: str | None = None, limit: int = 200) -> list[dict]:
     """
     List jobs (newest first, ORDER BY id DESC).
     Optional state filter. Return list of dicts.
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         if state is None:
@@ -243,9 +238,9 @@ def list_jobs(
         return [_row_to_dict(row) for row in cursor.fetchall()]
 
 
-def get_job(output_directory: Path, job_id: int) -> dict | None:
+def get_job(job_id: int) -> dict | None:
     """Get a job by id. Return dict or None."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             """SELECT id, channel_slug, episode_slug, episode_json, state, error, created_at, updated_at
@@ -256,12 +251,12 @@ def get_job(output_directory: Path, job_id: int) -> dict | None:
         return _row_to_dict(row) if row else None
 
 
-def count_jobs_by_state(output_directory: Path) -> dict[str, int]:
+def count_jobs_by_state() -> dict[str, int]:
     """
     Count jobs by state. Always return all four keys: queued, running, done, failed.
     Default 0 if absent.
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         # Initialize all states to 0
@@ -276,9 +271,9 @@ def count_jobs_by_state(output_directory: Path) -> dict[str, int]:
         return counts
 
 
-def set_state(output_directory: Path, key: str, value: str) -> None:
+def set_state(key: str, value: str) -> None:
     """Upsert key-value into app_state."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             "INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)",
@@ -287,18 +282,18 @@ def set_state(output_directory: Path, key: str, value: str) -> None:
         conn.commit()
 
 
-def get_state(output_directory: Path, key: str) -> str | None:
+def get_state(key: str) -> str | None:
     """Get value from app_state by key. Return None if missing."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM app_state WHERE key = ?", (key,))
         row = cursor.fetchone()
         return row[0] if row else None
 
 
-def delete_jobs_for_channel(output_directory: Path, channel_slug: str) -> int:
+def delete_jobs_for_channel(channel_slug: str) -> int:
     """Delete all download_jobs rows for channel_slug. Return count deleted."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             "DELETE FROM download_jobs WHERE channel_slug = ?", (channel_slug,)
@@ -307,9 +302,9 @@ def delete_jobs_for_channel(output_directory: Path, channel_slug: str) -> int:
         return cursor.rowcount
 
 
-def delete_state(output_directory: Path, key: str) -> None:
+def delete_state(key: str) -> None:
     """Delete a key from app_state. No-op if absent."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM app_state WHERE key = ?", (key,))
         conn.commit()

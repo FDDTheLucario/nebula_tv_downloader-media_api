@@ -40,10 +40,7 @@ def main(config: Config | None = None, auth: NebulaUserAuthorization | None = No
     for channel in channels:
         logging.info("Fetching episodes for channel `%s`", channel)
         channel_data = (
-            load_channel_info(
-                channel_slug=channel,
-                output_directory=config.downloader.download_path,
-            )
+            load_channel_info(channel_slug=channel)
             if config.downloader.load_channel_data_from_db
             else get_channel_video_content(
                 channel_slug=channel,

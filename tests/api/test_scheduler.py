@@ -36,6 +36,28 @@ class TestCheckScheduler:
         # Verify scheduler.start() was called
         fake_scheduler.start.assert_called_once()
 
+    def test_reschedule_updates_running_job(self, config, fake_auth):
+        """reschedule() updates interval and reschedules the live job."""
+        fake_scheduler = Mock()
+        fake_scheduler.running = True
+        scheduler = CheckScheduler(
+            config, fake_auth, scheduler_factory=lambda: fake_scheduler
+        )
+        scheduler.start()
+
+        scheduler.reschedule(5)
+
+        assert scheduler.interval_hours == 5
+        fake_scheduler.reschedule_job.assert_called_once_with(
+            "check_channels", trigger="interval", hours=5
+        )
+
+    def test_reschedule_without_running_scheduler(self, config, fake_auth):
+        """reschedule() before start() just records the new interval."""
+        scheduler = CheckScheduler(config, fake_auth)
+        scheduler.reschedule(9)
+        assert scheduler.interval_hours == 9
+
     def test_shutdown_stops_scheduler(self, config, fake_auth):
         """shutdown() stops the scheduler if it's running."""
         fake_scheduler = Mock()

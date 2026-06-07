@@ -279,7 +279,7 @@ def test_main_loads_channel_from_db_when_flag_set(mocker, tmp_path):
     mocker.patch.object(main, "remove_downloaded_episodes_from_results", return_value=[])
 
     main.main(config=config, auth=auth)
-    mock_load.assert_called_once_with(channel_slug="ch1", output_directory=tmp_path)
+    mock_load.assert_called_once_with(channel_slug="ch1")
     mock_remote.assert_not_called()
 
 

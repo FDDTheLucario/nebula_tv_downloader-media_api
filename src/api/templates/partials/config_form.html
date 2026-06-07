@@ -1,0 +1,83 @@
+<form id="config-form" class="config-form"
+      hx-post="/api/config" hx-target="#config-form" hx-swap="outerHTML">
+  {% if saved %}
+  <p class="config-msg ok">✓ Settings saved.{% if restart_required %}
+    <span class="warn">download_path changed — restart the app for it to take effect.</span>{% endif %}</p>
+  {% endif %}
+  {% if error %}
+  <p class="config-msg err">✗ {{ error }}</p>
+  {% endif %}
+
+  <fieldset>
+    <legend>Nebula API</legend>
+    <label>API token
+      <input type="password" name="user_api_token" autocomplete="off"
+             placeholder="{% if config.nebula_api.has_token %}•••••••• (unchanged){% else %}required{% endif %}">
+    </label>
+    <label>Authorization header
+      <input type="text" name="authorization_header" autocomplete="off"
+             value="{{ config.nebula_api.authorization_header }}">
+    </label>
+    <label>User agent
+      <input type="text" name="user_agent" value="{{ config.nebula_api.user_agent }}">
+    </label>
+    <label>Token refresh interval (hours)
+      <input type="number" name="token_refresh_interval_hours" min="1"
+             value="{{ config.nebula_api.token_refresh_interval_hours }}">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Filters</legend>
+    <label>Category search <span class="hint">(blank = disabled)</span>
+      <input type="text" name="category_search" value="{{ config.nebula_filters.category_search }}">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="include_nebula_first" value="true"
+             {% if config.nebula_filters.include_nebula_first %}checked{% endif %}> Include Nebula First
+    </label>
+    <label class="check">
+      <input type="checkbox" name="include_nebula_plus" value="true"
+             {% if config.nebula_filters.include_nebula_plus %}checked{% endif %}> Include Nebula Plus
+    </label>
+    <label class="check">
+      <input type="checkbox" name="include_nebula_originals" value="true"
+             {% if config.nebula_filters.include_nebula_originals %}checked{% endif %}> Include Nebula Originals
+    </label>
+    <label class="check">
+      <input type="checkbox" name="include_regular_videos" value="true"
+             {% if config.nebula_filters.include_regular_videos %}checked{% endif %}> Include regular videos
+    </label>
+    <label>Channels to parse <span class="hint">(comma-separated; blank = all)</span>
+      <input type="text" name="channels_to_parse" value="{{ config.nebula_filters.channels_to_parse }}">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Downloader</legend>
+    <label>Download path <span class="hint">(restart required)</span>
+      <input type="text" name="download_path" value="{{ config.downloader.download_path }}">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="load_channel_data_from_db" value="true"
+             {% if config.downloader.load_channel_data_from_db %}checked{% endif %}> Load channel data from DB
+    </label>
+    <label class="check">
+      <input type="checkbox" name="skip_if_video_exists" value="true"
+             {% if config.downloader.skip_if_video_exists %}checked{% endif %}> Skip if video exists
+    </label>
+    <label>Check interval (hours)
+      <input type="number" name="check_interval_hours" min="1"
+             value="{{ config.downloader.check_interval_hours }}">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Storage</legend>
+    <label>Database location <span class="hint">(global nebula.db; restart required)</span>
+      <input type="text" name="db_path" value="{{ config.db_path }}">
+    </label>
+  </fieldset>
+
+  <button type="submit">Save settings</button>
+</form>

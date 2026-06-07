@@ -11,8 +11,7 @@ from models.nebula.fetched import (
     NebulaChannelVideoContentEpisodes,
     NebulaChannelVideoContentResponseModel,
 )
-
-DB_FILENAME = "nebula.db"
+from utils.paths import get_db_path
 
 
 def _now() -> str:
@@ -24,9 +23,10 @@ class ChannelNotFoundError(LookupError):
     pass
 
 
-def _connect(output_directory: Path) -> sqlite3.Connection:
-    output_directory.mkdir(parents=True, exist_ok=True)
-    db_path = output_directory / DB_FILENAME
+def _connect() -> sqlite3.Connection:
+    """Open the single global nebula.db, creating tables if needed."""
+    db_path = get_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA foreign_keys = ON")
 
@@ -52,8 +52,33 @@ def _connect(output_directory: Path) -> sqlite3.Connection:
             added_at  TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS config (
+            id    INTEGER PRIMARY KEY CHECK (id = 1),
+            data  TEXT NOT NULL
+        )
+    """)
     conn.commit()
     return conn
+
+
+def get_config() -> dict | None:
+    """Return the stored config dict, or None if none has been saved yet."""
+    with closing(_connect()) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT data FROM config WHERE id = 1")
+        row = cursor.fetchone()
+        return json.loads(row[0]) if row else None
+
+
+def set_config(data: dict) -> None:
+    """Persist the config dict as the single config row."""
+    with closing(_connect()) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO config (id, data) VALUES (1, ?)",
+            (json.dumps(data),),
+        )
+        conn.commit()
 
 
 def save_channel_info(
@@ -66,7 +91,7 @@ def save_channel_info(
     channel_directory.mkdir(parents=True, exist_ok=True)
     logging.info("Saving channel info for `%s` to %s", channel_slug, channel_directory)
 
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         # Upsert channel
@@ -103,13 +128,11 @@ def save_channel_info(
 
 
 def load_channel_info(
-    channel_slug: str, output_directory: Path
+    channel_slug: str,
 ) -> NebulaChannelVideoContentResponseModel:
-    logging.info(
-        "Loading channel info for `%s` from %s", channel_slug, output_directory
-    )
+    logging.info("Loading channel info for `%s`", channel_slug)
 
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
 
         # Load channel
@@ -142,19 +165,19 @@ def load_channel_info(
         )
 
 
-def list_channel_slugs(output_directory: Path) -> list[str]:
+def list_channel_slugs() -> list[str]:
     """List all channel slugs in the database, sorted alphabetically.
 
     Returns an empty list if the database doesn't exist or has no channels.
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT slug FROM channels ORDER BY slug")
         rows = cursor.fetchall()
         return [row[0] for row in rows]
 
 
-def list_channels_with_info(output_directory: Path) -> list[dict]:
+def list_channels_with_info() -> list[dict]:
     """Per saved channel, return a dict:
       {slug, title, description, avatar_url, url, website,
        episode_count, published_at}
@@ -164,7 +187,7 @@ def list_channels_with_info(output_directory: Path) -> list[dict]:
     url: canonical Nebula channel page f"https://nebula.tv/{slug}".
     website: details_json 'website' (creator's own site) or None.
     """
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT slug, details_json FROM channels")
         rows = cursor.fetchall()
@@ -215,13 +238,13 @@ def list_channels_with_info(output_directory: Path) -> list[dict]:
         return result
 
 
-def add_subscription(output_directory: Path, slug: str) -> bool:
+def add_subscription(slug: str) -> bool:
     """Insert slug into subscriptions. Return True if newly added,
     False if it was already present. Empty/whitespace slug → ValueError."""
     slug = slug.strip()
     if not slug:
         raise ValueError("slug required")
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute(
             "INSERT OR IGNORE INTO subscriptions (slug, added_at) VALUES (?, ?)",
@@ -231,37 +254,37 @@ def add_subscription(output_directory: Path, slug: str) -> bool:
         return cursor.rowcount == 1
 
 
-def remove_subscription(output_directory: Path, slug: str) -> bool:
+def remove_subscription(slug: str) -> bool:
     """Delete slug from subscriptions. Return True if a row was removed,
     False if the slug was not subscribed. Does NOT touch channels/episodes."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM subscriptions WHERE slug = ?", (slug,))
         conn.commit()
         return cursor.rowcount > 0
 
 
-def list_subscriptions(output_directory: Path) -> list[str]:
+def list_subscriptions() -> list[str]:
     """Return all subscribed slugs, sorted alphabetically. [] if none."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT slug FROM subscriptions ORDER BY slug")
         return [row[0] for row in cursor.fetchall()]
 
 
-def is_subscribed(output_directory: Path, slug: str) -> bool:
+def is_subscribed(slug: str) -> bool:
     """True if slug is in subscriptions."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT 1 FROM subscriptions WHERE slug = ?", (slug,))
         return cursor.fetchone() is not None
 
 
-def delete_channel_data(output_directory: Path, slug: str) -> bool:
+def delete_channel_data(slug: str) -> bool:
     """Delete the channels row for slug (episodes cascade). Return True if a
     channels row existed and was deleted, else False. Does NOT touch the
     subscriptions table, download_jobs, app_state, or any files on disk."""
-    with closing(_connect(output_directory)) as conn:
+    with closing(_connect()) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM channels WHERE slug = ?", (slug,))
         conn.commit()

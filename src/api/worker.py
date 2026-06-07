@@ -44,17 +44,16 @@ class DownloadWorker:
             True if a job was claimed and processed (or failed).
             False if no job was available.
         """
-        download_path = self.config.downloader.download_path
-        job = jobs_db.claim_next_job(download_path)
+        job = jobs_db.claim_next_job()
 
         if job is None:
             return False
 
         try:
             self._process(job, self.config, self.auth)
-            jobs_db.mark_job_done(download_path, job["id"])
+            jobs_db.mark_job_done(job["id"])
         except Exception as e:
-            jobs_db.mark_job_failed(download_path, job["id"], str(e))
+            jobs_db.mark_job_failed(job["id"], str(e))
 
         return True
 

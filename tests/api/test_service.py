@@ -122,13 +122,13 @@ class TestCheckChannel:
         assert result == 2
 
         # Verify jobs were enqueued
-        jobs = jobs_db.list_jobs(download_path)
+        jobs = jobs_db.list_jobs()
         assert len(jobs) == 2
         slugs = {job["episode_slug"] for job in jobs}
         assert slugs == {"ep1", "ep2"}
 
         # Verify save_channel_info persisted the channel (spec: assert load_channel_info works)
-        saved = load_channel_info("ch-slug", download_path)
+        saved = load_channel_info("ch-slug")
         saved_ep_slugs = {ep.slug for ep in saved.episodes.results}
         assert saved_ep_slugs == {"ep1", "ep2"}
 
@@ -150,7 +150,7 @@ class TestCheckChannel:
 
         # Should only enqueue ep2 (ep1 already exists)
         assert result == 1
-        jobs = jobs_db.list_jobs(download_path)
+        jobs = jobs_db.list_jobs()
         assert len(jobs) == 1
         assert jobs[0]["episode_slug"] == "ep2"
 
@@ -164,7 +164,7 @@ class TestCheckChannel:
         stub_fetch = Mock(return_value=content)
         check_channel("ch-slug", config, fake_auth, fetch=stub_fetch)
 
-        state = jobs_db.get_state(download_path, "last_check:ch-slug")
+        state = jobs_db.get_state("last_check:ch-slug")
         assert state is not None
         # Should be a valid ISO timestamp
         datetime.fromisoformat(state)
@@ -251,7 +251,7 @@ class TestCheckAllChannels:
             assert mock_check.call_count == 1
 
         # Verify global last_check was set
-        state = jobs_db.get_state(download_path, "last_check")
+        state = jobs_db.get_state("last_check")
         assert state is not None
         datetime.fromisoformat(state)
 
@@ -408,7 +408,7 @@ check_interval_hours = 1
 
         config = Config(config_file)
 
-        db.add_subscription(config.downloader.download_path, "sub-a")
+        db.add_subscription("sub-a")
 
         stub_feed = Mock(side_effect=Exception("feed must not be called"))
         result = resolve_channels(config, fake_auth, feed=stub_feed)
@@ -423,7 +423,7 @@ class TestAddChannel:
         assert result["added"] is True
         assert result["enqueued"] == 3
         assert result["error"] is None
-        assert db.is_subscribed(config.downloader.download_path, "newch") is True
+        assert db.is_subscribed("newch") is True
 
     def test_add_channel_check_failure_keeps_subscription(
         self, tmp_path, config, fake_auth
@@ -433,10 +433,10 @@ class TestAddChannel:
         assert result["error"] == "boom"
         assert result["enqueued"] is None
         assert result["added"] is True
-        assert db.is_subscribed(config.downloader.download_path, "ch-err") is True
+        assert db.is_subscribed("ch-err") is True
 
     def test_add_channel_duplicate_added_false(self, tmp_path, config, fake_auth):
-        db.add_subscription(config.downloader.download_path, "dup")
+        db.add_subscription("dup")
         stub_check = Mock(return_value=0)
         result = add_channel(config, fake_auth, "dup", check=stub_check)
         assert result["added"] is False
@@ -458,19 +458,19 @@ class TestRemoveChannel:
             _make_episodes_obj(_make_episode_obj(slug="ep1")),
             download_path,
         )
-        db.add_subscription(download_path, ch_slug)
-        jobs_db.enqueue_job(download_path, ch_slug, "ep1", '{"slug": "ep1"}')
-        jobs_db.set_state(download_path, f"last_check:{ch_slug}", "ts")
+        db.add_subscription(ch_slug)
+        jobs_db.enqueue_job(ch_slug, "ep1", '{"slug": "ep1"}')
+        jobs_db.set_state(f"last_check:{ch_slug}", "ts")
 
         result = remove_channel(config, ch_slug)
         assert result["removed"] is True
         assert result["data_deleted"] is False
-        assert db.is_subscribed(download_path, ch_slug) is False
+        assert db.is_subscribed(ch_slug) is False
         # data must still be there
-        loaded = load_channel_info(ch_slug, download_path)
+        loaded = load_channel_info(ch_slug)
         assert len(loaded.episodes.results) == 1
-        assert len(jobs_db.list_jobs(download_path)) == 1
-        assert jobs_db.get_state(download_path, f"last_check:{ch_slug}") == "ts"
+        assert len(jobs_db.list_jobs()) == 1
+        assert jobs_db.get_state(f"last_check:{ch_slug}") == "ts"
 
     def test_remove_channel_delete_data_purges(self, tmp_path, config, fake_auth):
         download_path = config.downloader.download_path
@@ -482,18 +482,18 @@ class TestRemoveChannel:
             _make_episodes_obj(_make_episode_obj(slug="ep1")),
             download_path,
         )
-        db.add_subscription(download_path, ch_slug)
-        jobs_db.enqueue_job(download_path, ch_slug, "ep1", '{"slug": "ep1"}')
-        jobs_db.set_state(download_path, f"last_check:{ch_slug}", "ts")
+        db.add_subscription(ch_slug)
+        jobs_db.enqueue_job(ch_slug, "ep1", '{"slug": "ep1"}')
+        jobs_db.set_state(f"last_check:{ch_slug}", "ts")
 
         result = remove_channel(config, ch_slug, delete_data=True)
         assert result["removed"] is True
         assert result["data_deleted"] is True
-        assert db.is_subscribed(download_path, ch_slug) is False
+        assert db.is_subscribed(ch_slug) is False
         with pytest.raises(ChannelNotFoundError):
-            load_channel_info(ch_slug, download_path)
-        assert len(jobs_db.list_jobs(download_path)) == 0
-        assert jobs_db.get_state(download_path, f"last_check:{ch_slug}") is None
+            load_channel_info(ch_slug)
+        assert len(jobs_db.list_jobs()) == 0
+        assert jobs_db.get_state(f"last_check:{ch_slug}") is None
 
     def test_remove_channel_absent(self, tmp_path, config, fake_auth):
         result = remove_channel(config, "ghost")
@@ -508,14 +508,14 @@ class TestSeedSubscriptions:
         # config fixture has channels_to_parse = ch-slug
         count = seed_subscriptions_from_config(config)
         assert count == 1
-        assert db.list_subscriptions(config.downloader.download_path) == ["ch-slug"]
+        assert db.list_subscriptions() == ["ch-slug"]
 
     def test_seed_subscriptions_idempotent(self, tmp_path, config, fake_auth):
-        db.add_subscription(config.downloader.download_path, "existing")
+        db.add_subscription("existing")
         count = seed_subscriptions_from_config(config)
         assert count == 0
         # "ch-slug" from config must NOT have been added
-        subs = db.list_subscriptions(config.downloader.download_path)
+        subs = db.list_subscriptions()
         assert "ch-slug" not in subs
         assert "existing" in subs
 
@@ -546,7 +546,6 @@ class TestGetCachedDirectory:
         from api.service import get_cached_directory
         from models.nebula.channel_directory import NebulaChannelDirectoryResult
 
-        dp = config.downloader.download_path
         stub = Mock(
             return_value=[
                 NebulaChannelDirectoryResult(slug="a", title="A"),
@@ -557,7 +556,7 @@ class TestGetCachedDirectory:
         assert [c["slug"] for c in out] == ["a", "b"]
         assert all(set(c) == {"slug", "title", "avatar_url"} for c in out)
         stub.assert_called_once()
-        cached = jobs_db.get_state(dp, "channel_directory_cache")
+        cached = jobs_db.get_state("channel_directory_cache")
         assert cached is not None and "a" in cached
 
     def test_serves_fresh_cache(self, config, fake_auth):
@@ -565,10 +564,7 @@ class TestGetCachedDirectory:
 
         from api.service import get_cached_directory
 
-        dp = config.downloader.download_path
-        jobs_db.set_state(
-            dp,
-            "channel_directory_cache",
+        jobs_db.set_state("channel_directory_cache",
             json.dumps(
                 {
                     "fetched_at": "2026-06-06T23:59:00",
@@ -589,10 +585,7 @@ class TestGetCachedDirectory:
         from api.service import get_cached_directory
         from models.nebula.channel_directory import NebulaChannelDirectoryResult
 
-        dp = config.downloader.download_path
-        jobs_db.set_state(
-            dp,
-            "channel_directory_cache",
+        jobs_db.set_state("channel_directory_cache",
             json.dumps(
                 {
                     "fetched_at": "2026-06-06T00:00:00",
@@ -611,10 +604,7 @@ class TestGetCachedDirectory:
         from api.service import get_cached_directory
         from models.nebula.channel_directory import NebulaChannelDirectoryResult
 
-        dp = config.downloader.download_path
-        jobs_db.set_state(
-            dp,
-            "channel_directory_cache",
+        jobs_db.set_state("channel_directory_cache",
             json.dumps(
                 {
                     "fetched_at": "2026-06-06T23:59:00",
@@ -634,10 +624,7 @@ class TestGetCachedDirectory:
 
         from api.service import get_cached_directory
 
-        dp = config.downloader.download_path
-        jobs_db.set_state(
-            dp,
-            "channel_directory_cache",
+        jobs_db.set_state("channel_directory_cache",
             json.dumps(
                 {
                     "fetched_at": "2026-06-06T00:00:00",
@@ -665,8 +652,7 @@ class TestGetCachedDirectory:
         from api.service import get_cached_directory
         from models.nebula.channel_directory import NebulaChannelDirectoryResult
 
-        dp = config.downloader.download_path
-        jobs_db.set_state(dp, "channel_directory_cache", "not-json{")
+        jobs_db.set_state("channel_directory_cache", "not-json{")
         stub = Mock(return_value=[NebulaChannelDirectoryResult(slug="z", title="Z")])
         out = get_cached_directory(config, fake_auth, fetch=stub, now=_now_stub())
         assert [c["slug"] for c in out] == ["z"]
@@ -741,7 +727,7 @@ class TestSearchChannels:
 
         dp = config.downloader.download_path
         _save_local_channel(dp, "jetlag", title="Local Jetlag")
-        db.add_subscription(dp, "jetlag")
+        db.add_subscription("jetlag")
         directory = _dir_stub(("jetlag", "Remote Jetlag"))
         out = search_channels(config, fake_auth, "jet", directory=directory)
         assert len(out) == 1
@@ -763,8 +749,7 @@ class TestSearchChannels:
     def test_subscription_only_local_match(self, config, fake_auth):
         from api.service import search_channels
 
-        dp = config.downloader.download_path
-        db.add_subscription(dp, "subonly")
+        db.add_subscription("subonly")
         directory = _dir_stub()
         out = search_channels(config, fake_auth, "subonly", directory=directory)
         assert len(out) == 1

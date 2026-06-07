@@ -9,7 +9,6 @@ from models.nebula.episode import NebulaChannelVideoContentEpisodeResult
 from models.nebula.fetched import NebulaChannelVideoContentEpisodes
 from models.nebula.video_attributes import VideoNebulaAttributes
 from utils.db import (
-    DB_FILENAME,
     ChannelNotFoundError,
     _connect,
     load_channel_info,
@@ -35,9 +34,9 @@ def _episode(**overrides):
 
 # Test 1: _connect creates db file and schema
 def test_connect_creates_db_file_and_schema(tmp_path):
-    conn = _connect(tmp_path)
+    conn = _connect()
     try:
-        assert (tmp_path / DB_FILENAME).exists()
+        assert (tmp_path / "nebula.db").exists()
         cursor = conn.cursor()
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='channels'"
@@ -73,7 +72,7 @@ def test_save_writes_channel_row(tmp_path):
         output_directory=tmp_path,
     )
 
-    conn = _connect(tmp_path)
+    conn = _connect()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT details_json FROM channels WHERE slug = ?", ("ch-slug",))
@@ -95,7 +94,7 @@ def test_save_writes_one_row_per_episode(tmp_path):
         output_directory=tmp_path,
     )
 
-    conn = _connect(tmp_path)
+    conn = _connect()
     try:
         cursor = conn.cursor()
         cursor.execute(
@@ -123,7 +122,7 @@ def test_save_empty_episode_list(tmp_path):
         output_directory=tmp_path,
     )
 
-    conn = _connect(tmp_path)
+    conn = _connect()
     try:
         cursor = conn.cursor()
         cursor.execute(
@@ -148,7 +147,7 @@ def test_save_then_load_roundtrip(tmp_path):
         output_directory=tmp_path,
     )
 
-    response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+    response = load_channel_info(channel_slug="ch-slug")
     assert response.details.title == "Round Trip"
     assert len(response.episodes.results) == 1
     assert response.episodes.results[0].title == "Ep One"
@@ -165,7 +164,7 @@ def test_save_overwrites_replaces_episode_set(tmp_path):
         output_directory=tmp_path,
     )
 
-    response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+    response = load_channel_info(channel_slug="ch-slug")
     assert len(response.episodes.results) == 2
 
     # Re-save with only 1 episode
@@ -176,7 +175,7 @@ def test_save_overwrites_replaces_episode_set(tmp_path):
         output_directory=tmp_path,
     )
 
-    response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+    response = load_channel_info(channel_slug="ch-slug")
     assert len(response.episodes.results) == 1
 
 
@@ -212,17 +211,17 @@ def test_save_two_channels_are_isolated(tmp_path):
         output_directory=tmp_path,
     )
 
-    response_a = load_channel_info(channel_slug="ch-a", output_directory=tmp_path)
+    response_a = load_channel_info(channel_slug="ch-a")
     assert len(response_a.episodes.results) == 2
 
-    response_b = load_channel_info(channel_slug="ch-b", output_directory=tmp_path)
+    response_b = load_channel_info(channel_slug="ch-b")
     assert len(response_b.episodes.results) == 1
 
 
 # Test 10: load missing channel raises ChannelNotFoundError
 def test_load_missing_channel_raises_ChannelNotFoundError(tmp_path):
     with pytest.raises(ChannelNotFoundError) as exc:
-        load_channel_info(channel_slug="missing", output_directory=tmp_path)
+        load_channel_info(channel_slug="missing")
     assert "missing" in str(exc.value)
 
 
@@ -235,7 +234,7 @@ def test_load_empty_episode_set_returns_empty_results(tmp_path):
         output_directory=tmp_path,
     )
 
-    response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+    response = load_channel_info(channel_slug="ch-slug")
     assert response.episodes.results == []
 
 
@@ -250,7 +249,7 @@ def test_load_corrupt_episode_json_raises(tmp_path):
     )
 
     # Corrupt an episode JSON directly in the database
-    conn = _connect(tmp_path)
+    conn = _connect()
     try:
         cursor = conn.cursor()
         cursor.execute(
@@ -262,7 +261,7 @@ def test_load_corrupt_episode_json_raises(tmp_path):
         conn.close()
 
     with pytest.raises(json.JSONDecodeError):
-        load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+        load_channel_info(channel_slug="ch-slug")
 
 
 # Test 13: roundtrip preserves nested model fields
@@ -274,7 +273,7 @@ def test_roundtrip_preserves_nested_model_fields(tmp_path):
         output_directory=tmp_path,
     )
 
-    response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+    response = load_channel_info(channel_slug="ch-slug")
     episode = response.episodes.results[0]
     # Verify nested image fields roundtrip correctly
     assert str(episode.images.thumbnail.src) == "https://example.com/img.jpg"
@@ -286,7 +285,7 @@ def test_roundtrip_preserves_nested_model_fields(tmp_path):
 def test_list_channel_slugs_empty_db(tmp_path):
     from utils.db import list_channel_slugs
 
-    result = list_channel_slugs(tmp_path)
+    result = list_channel_slugs()
     assert result == []
 
 
@@ -306,7 +305,7 @@ def test_list_channel_slugs_returns_sorted_slugs(tmp_path):
         episodes_data=_episodes(),
         output_directory=tmp_path,
     )
-    result = list_channel_slugs(tmp_path)
+    result = list_channel_slugs()
     assert result == ["alpha-ch", "zulu-ch"]
 
 
@@ -320,7 +319,7 @@ def test_save_is_atomic_on_failure(tmp_path):
         output_directory=tmp_path,
     )
 
-    response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+    response = load_channel_info(channel_slug="ch-slug")
     assert len(response.episodes.results) == 2
 
     # Create wrapper classes to intercept and fail during episode INSERT
@@ -378,8 +377,8 @@ def test_save_is_atomic_on_failure(tmp_path):
     insert_phase_failed = [False]
     original_connect_func = _connect
 
-    def patched_connect(output_directory):
-        conn = original_connect_func(output_directory)
+    def patched_connect():
+        conn = original_connect_func()
         return FailingConnection(conn, call_count, insert_phase_failed)
 
     # Patch _connect and run second save with failure injection
@@ -403,7 +402,7 @@ def test_save_is_atomic_on_failure(tmp_path):
         assert insert_phase_failed[0], "Patch must fire during INSERT phase, not before"
 
     # Verify transaction rolled back: original state intact (2 episodes, original title)
-    response = load_channel_info(channel_slug="ch-slug", output_directory=tmp_path)
+    response = load_channel_info(channel_slug="ch-slug")
     assert len(response.episodes.results) == 2
     assert response.details.title == "Channel"  # Original title unchanged
 
@@ -414,7 +413,7 @@ def test_save_is_atomic_on_failure(tmp_path):
 def test_list_channels_with_info_empty(tmp_path):
     from utils.db import list_channels_with_info
 
-    result = list_channels_with_info(tmp_path)
+    result = list_channels_with_info()
     assert result == []
 
 
@@ -428,7 +427,7 @@ def test_list_channels_with_info_returns_details(tmp_path):
         output_directory=tmp_path,
     )
 
-    result = list_channels_with_info(tmp_path)
+    result = list_channels_with_info()
     assert len(result) == 1
     entry = result[0]
     assert entry["slug"] == "test-channel"
@@ -448,7 +447,7 @@ def test_list_channels_with_info_zero_episodes_avatar_none(tmp_path):
         output_directory=tmp_path,
     )
 
-    result = list_channels_with_info(tmp_path)
+    result = list_channels_with_info()
     assert len(result) == 1
     entry = result[0]
     assert entry["episode_count"] == 0
@@ -471,7 +470,7 @@ def test_list_channels_with_info_sorted_by_title(tmp_path):
         output_directory=tmp_path,
     )
 
-    result = list_channels_with_info(tmp_path)
+    result = list_channels_with_info()
     assert [c["title"] for c in result] == ["Apple", "Zebra"]
 
 
@@ -487,51 +486,51 @@ from utils.db import (  # noqa: E402
 
 
 def test_add_subscription_new_returns_true(tmp_path):
-    result = add_subscription(tmp_path, "a")
+    result = add_subscription("a")
     assert result is True
-    assert list_subscriptions(tmp_path) == ["a"]
+    assert list_subscriptions() == ["a"]
 
 
 def test_add_subscription_duplicate_returns_false(tmp_path):
-    add_subscription(tmp_path, "a")
-    result = add_subscription(tmp_path, "a")
+    add_subscription("a")
+    result = add_subscription("a")
     assert result is False
-    assert list_subscriptions(tmp_path) == ["a"]
+    assert list_subscriptions() == ["a"]
 
 
 def test_add_subscription_empty_raises(tmp_path):
     with pytest.raises(ValueError):
-        add_subscription(tmp_path, "")
+        add_subscription("")
     with pytest.raises(ValueError):
-        add_subscription(tmp_path, "  ")
+        add_subscription("  ")
 
 
 def test_list_subscriptions_sorted(tmp_path):
-    add_subscription(tmp_path, "z")
-    add_subscription(tmp_path, "a")
-    add_subscription(tmp_path, "m")
-    assert list_subscriptions(tmp_path) == ["a", "m", "z"]
+    add_subscription("z")
+    add_subscription("a")
+    add_subscription("m")
+    assert list_subscriptions() == ["a", "m", "z"]
 
 
 def test_list_subscriptions_empty(tmp_path):
-    assert list_subscriptions(tmp_path) == []
+    assert list_subscriptions() == []
 
 
 def test_is_subscribed(tmp_path):
-    add_subscription(tmp_path, "a")
-    assert is_subscribed(tmp_path, "a") is True
-    assert is_subscribed(tmp_path, "b") is False
+    add_subscription("a")
+    assert is_subscribed("a") is True
+    assert is_subscribed("b") is False
 
 
 def test_remove_subscription_present_returns_true(tmp_path):
-    add_subscription(tmp_path, "a")
-    result = remove_subscription(tmp_path, "a")
+    add_subscription("a")
+    result = remove_subscription("a")
     assert result is True
-    assert list_subscriptions(tmp_path) == []
+    assert list_subscriptions() == []
 
 
 def test_remove_subscription_absent_returns_false(tmp_path):
-    result = remove_subscription(tmp_path, "ghost")
+    result = remove_subscription("ghost")
     assert result is False
 
 
@@ -542,9 +541,9 @@ def test_remove_subscription_keeps_channel_data(tmp_path):
         episodes_data=_episodes(_episode(slug="ep1"), _episode(slug="ep2")),
         output_directory=tmp_path,
     )
-    add_subscription(tmp_path, "a")
-    remove_subscription(tmp_path, "a")
-    loaded = load_channel_info("a", tmp_path)
+    add_subscription("a")
+    remove_subscription("a")
+    loaded = load_channel_info("a")
     assert len(loaded.episodes.results) == 2
 
 
@@ -555,10 +554,10 @@ def test_delete_channel_data_removes_channel_and_episodes(tmp_path):
         episodes_data=_episodes(_episode(slug="ep1"), _episode(slug="ep2")),
         output_directory=tmp_path,
     )
-    result = delete_channel_data(tmp_path, "ch")
+    result = delete_channel_data("ch")
     assert result is True
     with pytest.raises(ChannelNotFoundError):
-        load_channel_info("ch", tmp_path)
+        load_channel_info("ch")
     conn = sqlite3.connect(str(tmp_path / "nebula.db"))
     try:
         cursor = conn.cursor()
@@ -569,7 +568,7 @@ def test_delete_channel_data_removes_channel_and_episodes(tmp_path):
 
 
 def test_delete_channel_data_absent_returns_false(tmp_path):
-    result = delete_channel_data(tmp_path, "never-saved")
+    result = delete_channel_data("never-saved")
     assert result is False
 
 
@@ -580,6 +579,6 @@ def test_delete_channel_data_keeps_subscription(tmp_path):
         episodes_data=_episodes(),
         output_directory=tmp_path,
     )
-    add_subscription(tmp_path, "ch")
-    delete_channel_data(tmp_path, "ch")
-    assert is_subscribed(tmp_path, "ch") is True
+    add_subscription("ch")
+    delete_channel_data("ch")
+    assert is_subscribed("ch") is True

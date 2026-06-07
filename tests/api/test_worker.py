@@ -35,9 +35,7 @@ class TestDownloadWorker:
         }
 
         # Enqueue a job
-        jobs_db.enqueue_job(
-            download_path,
-            job_dict["channel_slug"],
+        jobs_db.enqueue_job(job_dict["channel_slug"],
             job_dict["episode_slug"],
             job_dict["episode_json"],
         )
@@ -57,7 +55,7 @@ class TestDownloadWorker:
         assert called_job["episode_slug"] == "ep1"
 
         # Verify job is now done
-        jobs_list = jobs_db.list_jobs(download_path)
+        jobs_list = jobs_db.list_jobs()
         assert len(jobs_list) == 1
         assert jobs_list[0]["state"] == "done"
 
@@ -67,9 +65,7 @@ class TestDownloadWorker:
         download_path.mkdir(parents=True, exist_ok=True)
 
         ep = make_episode(slug="ep2", attributes=["is_nebula_plus"])
-        jobs_db.enqueue_job(
-            download_path,
-            "ch-slug",
+        jobs_db.enqueue_job("ch-slug",
             ep.slug,
             ep.model_dump_json(),
         )
@@ -85,7 +81,7 @@ class TestDownloadWorker:
         assert result is True
 
         # Verify job is marked failed
-        jobs_list = jobs_db.list_jobs(download_path)
+        jobs_list = jobs_db.list_jobs()
         assert len(jobs_list) == 1
         assert jobs_list[0]["state"] == "failed"
         assert "boom" in jobs_list[0]["error"]
@@ -98,8 +94,8 @@ class TestDownloadWorker:
         ep1 = make_episode(slug="ep1", attributes=["is_nebula_plus"])
         ep2 = make_episode(slug="ep2", attributes=["is_nebula_plus"])
 
-        jobs_db.enqueue_job(download_path, "ch-slug", ep1.slug, ep1.model_dump_json())
-        jobs_db.enqueue_job(download_path, "ch-slug", ep2.slug, ep2.model_dump_json())
+        jobs_db.enqueue_job("ch-slug", ep1.slug, ep1.model_dump_json())
+        jobs_db.enqueue_job("ch-slug", ep2.slug, ep2.model_dump_json())
 
         spy_process = Mock()
         worker = DownloadWorker(config, fake_auth, process=spy_process)
@@ -115,7 +111,7 @@ class TestDownloadWorker:
         assert spy_process.call_count == 2
 
         # Verify both are done
-        jobs_list = jobs_db.list_jobs(download_path)
+        jobs_list = jobs_db.list_jobs()
         assert all(job["state"] == "done" for job in jobs_list)
 
     def test_start_then_stop_drains_queue(self, tmp_path, config, fake_auth):
@@ -126,8 +122,8 @@ class TestDownloadWorker:
         ep1 = make_episode(slug="ep1", attributes=["is_nebula_plus"])
         ep2 = make_episode(slug="ep2", attributes=["is_nebula_plus"])
 
-        jobs_db.enqueue_job(download_path, "ch-slug", ep1.slug, ep1.model_dump_json())
-        jobs_db.enqueue_job(download_path, "ch-slug", ep2.slug, ep2.model_dump_json())
+        jobs_db.enqueue_job("ch-slug", ep1.slug, ep1.model_dump_json())
+        jobs_db.enqueue_job("ch-slug", ep2.slug, ep2.model_dump_json())
 
         # Create a fast process spy
         spy_process = Mock()
@@ -141,7 +137,7 @@ class TestDownloadWorker:
         timeout = 5.0
         start_time = time.time()
         while time.time() - start_time < timeout:
-            counts = jobs_db.count_jobs_by_state(download_path)
+            counts = jobs_db.count_jobs_by_state()
             if counts["done"] == 2:
                 break
             time.sleep(0.05)
@@ -153,7 +149,7 @@ class TestDownloadWorker:
         assert worker.running is False
 
         # Verify both jobs are done
-        counts = jobs_db.count_jobs_by_state(download_path)
+        counts = jobs_db.count_jobs_by_state()
         assert counts["done"] == 2
         assert counts["queued"] == 0
         assert counts["running"] == 0

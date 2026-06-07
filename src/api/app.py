@@ -32,7 +32,6 @@ def create_app(
     Returns:
         Configured FastAPI application
     """
-    download_path = config.downloader.download_path
     template_dir = Path(__file__).parent / "templates"
     env = Environment(
         loader=FileSystemLoader(str(template_dir)),
@@ -44,7 +43,7 @@ def create_app(
         # Startup
         if start_background:
             service.seed_subscriptions_from_config(config)
-            jobs_db.reset_running_jobs(download_path)
+            jobs_db.reset_running_jobs()
             worker = DownloadWorker(config, auth)
             worker.start()
             app.state.worker = worker
@@ -71,16 +70,14 @@ def create_app(
     app.state.auth = auth
 
     def _channels_view() -> list[dict]:
-        channels = list_channels_with_info(download_path)
+        channels = list_channels_with_info()
         for c in channels:
-            c["last_check"] = jobs_db.get_state(
-                download_path, f"last_check:{c['slug']}"
-            )
+            c["last_check"] = jobs_db.get_state(f"last_check:{c['slug']}")
         return channels
 
     def _subscriptions_view() -> list[dict]:
-        subs = db.list_subscriptions(download_path)
-        info_by_slug = {c["slug"]: c for c in list_channels_with_info(download_path)}
+        subs = db.list_subscriptions()
+        info_by_slug = {c["slug"]: c for c in list_channels_with_info()}
         rows = []
         for slug in subs:
             info = info_by_slug.get(slug)
@@ -92,9 +89,7 @@ def create_app(
                     "avatar_url": (info or {}).get("avatar_url"),
                     "url": (info or {}).get("url", f"https://nebula.tv/{slug}"),
                     "episode_count": (info or {}).get("episode_count", 0),
-                    "last_check": jobs_db.get_state(
-                        download_path, f"last_check:{slug}"
-                    ),
+                    "last_check": jobs_db.get_state(f"last_check:{slug}"),
                     "has_data": info is not None,
                 }
             )
@@ -109,8 +104,8 @@ def create_app(
     @app.get("/api/status")
     async def get_status():
         """Get current status: job counts, last check time, scheduler state."""
-        counts = jobs_db.count_jobs_by_state(download_path)
-        last_check = jobs_db.get_state(download_path, "last_check")
+        counts = jobs_db.count_jobs_by_state()
+        last_check = jobs_db.get_state("last_check")
         scheduler_running = (
             getattr(app.state, "scheduler", None) is not None
             and app.state.scheduler.running
@@ -129,7 +124,7 @@ def create_app(
     @app.get("/api/jobs")
     async def get_jobs(state: str | None = Query(None)):
         """Get list of jobs, optionally filtered by state."""
-        return jobs_db.list_jobs(download_path, state=state)
+        return jobs_db.list_jobs(state=state)
 
     @app.post("/api/check")
     async def post_check():
@@ -145,18 +140,18 @@ def create_app(
     @app.post("/api/jobs/{job_id}/retry")
     async def retry_job(job_id: int):
         """Retry a failed job."""
-        requeued = jobs_db.requeue_job(download_path, job_id)
+        requeued = jobs_db.requeue_job(job_id)
         return {"requeued": requeued}
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
         """Render the dashboard."""
-        counts = jobs_db.count_jobs_by_state(download_path)
-        last_check = jobs_db.get_state(download_path, "last_check")
+        counts = jobs_db.count_jobs_by_state()
+        last_check = jobs_db.get_state("last_check")
         channels = _channels_view()
         jobs = [
             presentation.decorate_job(dict(j))
-            for j in jobs_db.list_jobs(download_path, limit=50)
+            for j in jobs_db.list_jobs(limit=50)
         ]
         context = {
             "request": request,
@@ -174,7 +169,7 @@ def create_app(
         """Render the jobs table rows."""
         jobs = [
             presentation.decorate_job(dict(j))
-            for j in jobs_db.list_jobs(download_path, limit=50)
+            for j in jobs_db.list_jobs(limit=50)
         ]
         context = {
             "request": request,
@@ -193,6 +188,56 @@ def create_app(
                 {
                     "request": request,
                     "subscriptions": _subscriptions_view(),
+                    "config": config.as_view(),
+                }
+            )
+        )
+
+    @app.post("/api/config", response_class=HTMLResponse)
+    async def save_config_route(request: Request):
+        """Validate and persist edited config, applying changes live."""
+        form = await request.form()
+        data = {k: v for k, v in form.items()}
+        old_path = config.downloader.download_path
+        old_interval = config.downloader.check_interval_hours
+        old_db_path = config.as_view()["db_path"]
+        new_db_path = (data.get("db_path") or "").strip()
+
+        try:
+            config.apply_updates(data)
+        except Exception as exc:  # noqa: BLE001 - surface validation errors in UI
+            template = env.get_template("partials/config_form.html")
+            return HTMLResponse(
+                template.render(
+                    {
+                        "request": request,
+                        "config": config.as_view(),
+                        "error": str(exc),
+                    }
+                ),
+                status_code=400,
+            )
+
+        new_interval = config.downloader.check_interval_hours
+        scheduler = getattr(app.state, "scheduler", None)
+        if scheduler is not None and new_interval != old_interval:
+            scheduler.reschedule(new_interval)
+
+        db_path_changed = bool(new_db_path) and new_db_path != old_db_path
+        if db_path_changed:
+            config.set_db_location(new_db_path)
+
+        restart_required = (
+            config.downloader.download_path != old_path or db_path_changed
+        )
+        template = env.get_template("partials/config_form.html")
+        return HTMLResponse(
+            template.render(
+                {
+                    "request": request,
+                    "config": config.as_view(),
+                    "saved": True,
+                    "restart_required": restart_required,
                 }
             )
         )

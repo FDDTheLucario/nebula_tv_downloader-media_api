@@ -93,18 +93,13 @@ def check_channel(
     enqueued_count = 0
     for ep in new_episodes:
         if jobs_db.enqueue_job(
-            config.downloader.download_path,
             channel_slug,
             ep.slug,
             ep.model_dump_json(),
         ):
             enqueued_count += 1
 
-    jobs_db.set_state(
-        config.downloader.download_path,
-        f"last_check:{channel_slug}",
-        _now(),
-    )
+    jobs_db.set_state(f"last_check:{channel_slug}", _now())
 
     return enqueued_count
 
@@ -118,7 +113,7 @@ def resolve_channels(
     """
     Resolve channels: subscriptions table first, then config list, then feed.
     """
-    subs = db.list_subscriptions(config.downloader.download_path)
+    subs = db.list_subscriptions()
     if subs:
         return subs
 
@@ -142,11 +137,7 @@ def check_all_channels(config: Config, auth: NebulaUserAuthorization) -> dict[st
     for ch in channels:
         result[ch] = check_channel(ch, config, auth)
 
-    jobs_db.set_state(
-        config.downloader.download_path,
-        "last_check",
-        _now(),
-    )
+    jobs_db.set_state("last_check", _now())
 
     return result
 
@@ -169,7 +160,7 @@ def add_channel(
     slug = slug.strip()
     if not slug:
         raise ValueError("slug required")
-    added = db.add_subscription(config.downloader.download_path, slug)
+    added = db.add_subscription(slug)
     try:
         enqueued = check(slug, config, auth)
         error = None
@@ -188,12 +179,11 @@ def remove_channel(
     """Unsubscribe from slug. Keep data unless delete_data.
     Return {"slug", "removed": bool, "data_deleted": bool}.
     """
-    download_path = config.downloader.download_path
-    removed = db.remove_subscription(download_path, slug)
+    removed = db.remove_subscription(slug)
     if delete_data:
-        db.delete_channel_data(download_path, slug)
-        jobs_db.delete_jobs_for_channel(download_path, slug)
-        jobs_db.delete_state(download_path, f"last_check:{slug}")
+        db.delete_channel_data(slug)
+        jobs_db.delete_jobs_for_channel(slug)
+        jobs_db.delete_state(f"last_check:{slug}")
     return {"slug": slug, "removed": removed, "data_deleted": delete_data}
 
 
@@ -202,13 +192,12 @@ def seed_subscriptions_from_config(config: Config) -> int:
     is set, add each slug. Idempotent: no-op when subscriptions already exist.
     Return count seeded.
     """
-    download_path = config.downloader.download_path
-    if db.list_subscriptions(download_path):
+    if db.list_subscriptions():
         return 0
     slugs = config.nebula_filters.channels_to_parse or []
     count = 0
     for slug in slugs:
-        if db.add_subscription(download_path, slug):
+        if db.add_subscription(slug):
             count += 1
     return count
 
@@ -230,8 +219,7 @@ def get_cached_directory(
     Served from app_state JSON cache when fresh; otherwise fetched live, cached,
     and returned. On a live-fetch failure, fall back to a stale cache if present;
     if none, return []. Never raises."""
-    download_path = config.downloader.download_path
-    cached = jobs_db.get_state(download_path, DIRECTORY_CACHE_KEY)
+    cached = jobs_db.get_state(DIRECTORY_CACHE_KEY)
     cached_channels: list[dict] = []
     if cached:
         try:
@@ -258,7 +246,6 @@ def get_cached_directory(
         for r in results
     ]
     jobs_db.set_state(
-        download_path,
         DIRECTORY_CACHE_KEY,
         json.dumps({"fetched_at": now(), "channels": channels}),
     )
@@ -296,17 +283,15 @@ def search_channels(
     if not q:
         return []
 
-    download_path = config.downloader.download_path
-
     merged: dict[str, dict] = {}
-    for info in db.list_channels_with_info(download_path):
+    for info in db.list_channels_with_info():
         merged[info["slug"]] = {
             "slug": info["slug"],
             "title": info.get("title") or info["slug"],
             "avatar_url": info.get("avatar_url"),
             "source": "local",
         }
-    for slug in db.list_subscriptions(download_path):
+    for slug in db.list_subscriptions():
         if slug not in merged:
             merged[slug] = {
                 "slug": slug,
@@ -336,7 +321,7 @@ def search_channels(
         results.append(
             {
                 **entry,
-                "subscribed": db.is_subscribed(download_path, entry["slug"]),
+                "subscribed": db.is_subscribed(entry["slug"]),
             }
         )
     return results

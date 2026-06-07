@@ -56,6 +56,14 @@ class CheckScheduler:
             self._scheduler.shutdown(wait=False)
             self._scheduler = None
 
+    def reschedule(self, interval_hours: int) -> None:
+        """Change the check interval, updating the live job if running."""
+        self.interval_hours = interval_hours
+        if self._scheduler is not None and self._scheduler.running:
+            self._scheduler.reschedule_job(
+                "check_channels", trigger="interval", hours=interval_hours
+            )
+
     def trigger_now(self) -> dict[str, int]:
         """
         Trigger a check immediately.

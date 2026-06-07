@@ -1,8 +1,30 @@
 import runpy
 
+import pytest
 from fastapi import FastAPI
 
-from serve import build
+from serve import build, _UnconfiguredAuth
+
+
+def test_unconfigured_auth_raises_until_configured():
+    auth = _UnconfiguredAuth()
+    auth.refresh_authorization_token()  # no-op, must not raise
+    with pytest.raises(RuntimeError):
+        auth.get_authorization_header()
+
+
+def test_build_without_token_starts_setup_mode(monkeypatch, config):
+    """With no API token, build() starts the app without contacting Nebula."""
+    config.nebula_api.user_api_token = ""
+    monkeypatch.setattr("serve.Config", lambda: config)
+
+    def fail_auth(*args, **kwargs):
+        raise AssertionError("auth must not be constructed without a token")
+
+    monkeypatch.setattr("serve.NebulaUserAuthorization", fail_auth)
+
+    app = build()
+    assert isinstance(app, FastAPI)
 
 
 def test_build_creates_app(monkeypatch, config, fake_auth):

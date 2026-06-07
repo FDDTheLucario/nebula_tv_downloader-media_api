@@ -28,11 +28,9 @@ def test_status_empty(config, fake_auth):
 
 def test_status_reflects_jobs(config, fake_auth):
     """GET /api/status reflects job counts."""
-    download_path = config.downloader.download_path
-
     # Enqueue some jobs
-    jobs_db.enqueue_job(download_path, "ch1", "ep1", '{"slug": "ep1"}')
-    jobs_db.enqueue_job(download_path, "ch1", "ep2", '{"slug": "ep2"}')
+    jobs_db.enqueue_job("ch1", "ep1", '{"slug": "ep1"}')
+    jobs_db.enqueue_job("ch1", "ep2", '{"slug": "ep2"}')
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/api/status")
@@ -68,9 +66,7 @@ def test_channels_endpoint_lists_saved_channels(config, fake_auth):
 
 def test_jobs_endpoint_returns_jobs(config, fake_auth):
     """GET /api/jobs returns all jobs."""
-    download_path = config.downloader.download_path
-
-    jobs_db.enqueue_job(download_path, "ch1", "ep1", '{"slug": "ep1"}')
+    jobs_db.enqueue_job("ch1", "ep1", '{"slug": "ep1"}')
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/api/jobs")
@@ -82,15 +78,13 @@ def test_jobs_endpoint_returns_jobs(config, fake_auth):
 
 def test_jobs_endpoint_filters_by_state(config, fake_auth):
     """GET /api/jobs?state=queued filters by state."""
-    download_path = config.downloader.download_path
-
     # Enqueue and mark one as done
-    jobs_db.enqueue_job(download_path, "ch1", "ep1", '{"slug": "ep1"}')
-    job = jobs_db.claim_next_job(download_path)
-    jobs_db.mark_job_done(download_path, job["id"])
+    jobs_db.enqueue_job("ch1", "ep1", '{"slug": "ep1"}')
+    job = jobs_db.claim_next_job()
+    jobs_db.mark_job_done(job["id"])
 
     # Enqueue another
-    jobs_db.enqueue_job(download_path, "ch1", "ep2", '{"slug": "ep2"}')
+    jobs_db.enqueue_job("ch1", "ep2", '{"slug": "ep2"}')
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/api/jobs?state=queued")
@@ -115,12 +109,10 @@ def test_post_check_invokes_service(config, fake_auth, monkeypatch):
 
 def test_post_retry_requeues_failed_job(config, fake_auth):
     """POST /api/jobs/{id}/retry requeues a failed job."""
-    download_path = config.downloader.download_path
-
     # Enqueue, claim, and fail a job
-    jobs_db.enqueue_job(download_path, "ch1", "ep1", '{"slug": "ep1"}')
-    job = jobs_db.claim_next_job(download_path)
-    jobs_db.mark_job_failed(download_path, job["id"], "test error")
+    jobs_db.enqueue_job("ch1", "ep1", '{"slug": "ep1"}')
+    job = jobs_db.claim_next_job()
+    jobs_db.mark_job_failed(job["id"], "test error")
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.post(f"/api/jobs/{job['id']}/retry")
@@ -128,7 +120,7 @@ def test_post_retry_requeues_failed_job(config, fake_auth):
     assert resp.json() == {"requeued": True}
 
     # Verify job is back to queued
-    requeued = jobs_db.get_job(download_path, job["id"])
+    requeued = jobs_db.get_job(job["id"])
     assert requeued["state"] == "queued"
 
 
@@ -143,11 +135,7 @@ def test_dashboard_renders_html(config, fake_auth):
 
 def test_partials_jobs_renders_rows(config, fake_auth):
     """GET /partials/jobs renders job rows."""
-    download_path = config.downloader.download_path
-
-    jobs_db.enqueue_job(
-        download_path, "ch1", "test-ep-slug", '{"slug": "test-ep-slug"}'
-    )
+    jobs_db.enqueue_job("ch1", "test-ep-slug", '{"slug": "test-ep-slug"}')
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/partials/jobs")
@@ -161,7 +149,7 @@ def test_channels_endpoint_includes_last_check(config, fake_auth):
     ep = make_episode()
     content = make_content(ep)
     save_channel_info("test-channel", content.details, content.episodes, download_path)
-    jobs_db.set_state(download_path, "last_check:test-channel", "2026-06-07T00:00:00")
+    jobs_db.set_state("last_check:test-channel", "2026-06-07T00:00:00")
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/api/channels")
@@ -189,9 +177,8 @@ def test_dashboard_shows_channel_title_and_count(config, fake_auth):
 
 def test_dashboard_shows_video_title_and_duration(config, fake_auth):
     """GET / shows video title and formatted duration in job rows."""
-    download_path = config.downloader.download_path
     ep = make_episode(title="My Video", duration=125)
-    jobs_db.enqueue_job(download_path, "ch", "ep", ep.model_dump_json())
+    jobs_db.enqueue_job("ch", "ep", ep.model_dump_json())
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/")
@@ -202,9 +189,8 @@ def test_dashboard_shows_video_title_and_duration(config, fake_auth):
 
 def test_partials_jobs_shows_badge_and_thumbnail(config, fake_auth):
     """GET /partials/jobs shows badges, thumbnail, and watch link."""
-    download_path = config.downloader.download_path
     ep = make_episode(attributes=["is_nebula_plus"])
-    jobs_db.enqueue_job(download_path, "ch", "ep", ep.model_dump_json())
+    jobs_db.enqueue_job("ch", "ep", ep.model_dump_json())
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/partials/jobs")
@@ -216,9 +202,8 @@ def test_partials_jobs_shows_badge_and_thumbnail(config, fake_auth):
 
 def test_partials_jobs_malformed_episode_json_renders_slug(config, fake_auth):
     """GET /partials/jobs with non-dict episode_json returns 200 and falls back to slug."""
-    download_path = config.downloader.download_path
     # Enqueue a job where episode_json is valid JSON but not a dict (a list)
-    jobs_db.enqueue_job(download_path, "ch", "bad-ep-slug", "[]")
+    jobs_db.enqueue_job("ch", "bad-ep-slug", "[]")
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/partials/jobs")
@@ -240,8 +225,7 @@ def test_settings_page_renders(config, fake_auth):
 
 def test_settings_lists_subscriptions(config, fake_auth):
     """GET /settings lists subscribed channel slugs."""
-    download_path = config.downloader.download_path
-    db.add_subscription(download_path, "ch-a")
+    db.add_subscription("ch-a")
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/settings")
@@ -251,18 +235,15 @@ def test_settings_lists_subscriptions(config, fake_auth):
 
 def test_add_channel_route_subscribes(config, fake_auth, mocker):
     """POST /api/channels/add subscribes the channel (no network)."""
-    download_path = config.downloader.download_path
     mock_add = mocker.patch(
         "api.app.service.add_channel",
-        side_effect=lambda cfg, a, s: db.add_subscription(
-            cfg.downloader.download_path, s
-        ),
+        side_effect=lambda cfg, a, s: db.add_subscription(s),
     )
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.post("/api/channels/add", data={"slug": "new-ch"})
     assert resp.status_code == 200
-    assert db.is_subscribed(download_path, "new-ch") is True
+    assert db.is_subscribed("new-ch") is True
     assert "new-ch" in resp.text
     mock_add.assert_called_once()
 
@@ -274,21 +255,21 @@ def test_remove_channel_route_keeps_data(config, fake_auth):
     ep = make_episode(slug="ep1")
     content = make_content(ep)
     save_channel_info("rm-ch", content.details, content.episodes, download_path)
-    db.add_subscription(download_path, "rm-ch")
-    jobs_db.enqueue_job(download_path, "rm-ch", "ep1", '{"slug":"ep1"}')
-    jobs_db.set_state(download_path, "last_check:rm-ch", "2026-06-07T00:00:00")
+    db.add_subscription("rm-ch")
+    jobs_db.enqueue_job("rm-ch", "ep1", '{"slug":"ep1"}')
+    jobs_db.set_state("last_check:rm-ch", "2026-06-07T00:00:00")
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.post("/api/channels/remove", data={"slug": "rm-ch"})
     assert resp.status_code == 200
-    assert db.is_subscribed(download_path, "rm-ch") is False
-    loaded = load_channel_info("rm-ch", download_path)
+    assert db.is_subscribed("rm-ch") is False
+    loaded = load_channel_info("rm-ch")
     assert len(loaded.episodes.results) == 1
     remaining_jobs = [
-        j for j in jobs_db.list_jobs(download_path) if j["channel_slug"] == "rm-ch"
+        j for j in jobs_db.list_jobs() if j["channel_slug"] == "rm-ch"
     ]
     assert len(remaining_jobs) > 0
-    assert jobs_db.get_state(download_path, "last_check:rm-ch") == "2026-06-07T00:00:00"
+    assert jobs_db.get_state("last_check:rm-ch") == "2026-06-07T00:00:00"
 
 
 def test_remove_channel_route_delete_data_purges(config, fake_auth):
@@ -298,9 +279,9 @@ def test_remove_channel_route_delete_data_purges(config, fake_auth):
     ep = make_episode(slug="ep1")
     content = make_content(ep)
     save_channel_info("rm-ch", content.details, content.episodes, download_path)
-    db.add_subscription(download_path, "rm-ch")
-    jobs_db.enqueue_job(download_path, "rm-ch", "ep1", '{"slug":"ep1"}')
-    jobs_db.set_state(download_path, "last_check:rm-ch", "2026-06-07T00:00:00")
+    db.add_subscription("rm-ch")
+    jobs_db.enqueue_job("rm-ch", "ep1", '{"slug":"ep1"}')
+    jobs_db.set_state("last_check:rm-ch", "2026-06-07T00:00:00")
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.post(
@@ -308,12 +289,12 @@ def test_remove_channel_route_delete_data_purges(config, fake_auth):
     )
     assert resp.status_code == 200
     with pytest.raises(ChannelNotFoundError):
-        load_channel_info("rm-ch", download_path)
+        load_channel_info("rm-ch")
     remaining_jobs = [
-        j for j in jobs_db.list_jobs(download_path) if j["channel_slug"] == "rm-ch"
+        j for j in jobs_db.list_jobs() if j["channel_slug"] == "rm-ch"
     ]
     assert remaining_jobs == []
-    assert jobs_db.get_state(download_path, "last_check:rm-ch") is None
+    assert jobs_db.get_state("last_check:rm-ch") is None
 
 
 def test_dashboard_has_settings_link(config, fake_auth):
@@ -357,8 +338,7 @@ def test_post_check_uses_scheduler_when_present(config, fake_auth, mocker):
 
 def test_partials_subscriptions_renders_slug(config, fake_auth):
     """GET /partials/subscriptions returns 200 and includes the subscribed slug."""
-    download_path = config.downloader.download_path
-    db.add_subscription(download_path, "my-test-channel")
+    db.add_subscription("my-test-channel")
 
     client = TestClient(create_app(config, fake_auth, start_background=False))
     resp = client.get("/partials/subscriptions")
@@ -424,3 +404,78 @@ def test_settings_input_has_search_wiring(config, fake_auth):
     assert resp.status_code == 200
     assert 'hx-get="/api/channels/search"' in resp.text
     assert 'id="slug-input"' in resp.text
+
+
+def _config_form(**overrides):
+    """Build a full config form payload, overridable per test."""
+    data = {
+        "user_api_token": "",
+        "authorization_header": "",
+        "user_agent": "ua",
+        "token_refresh_interval_hours": "6",
+        "category_search": "",
+        "channels_to_parse": "",
+        "download_path": "/tmp/out",
+        "check_interval_hours": "1",
+        "db_path": "",
+    }
+    data.update(overrides)
+    return data
+
+
+def test_settings_renders_config_form(config, fake_auth):
+    """GET /settings renders the config edit form."""
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert 'name="user_api_token"' in resp.text
+    assert 'name="db_path"' in resp.text
+    assert "Configuration" in resp.text
+
+
+def test_post_config_saves_and_applies_live(config, fake_auth):
+    """POST /api/config persists changes and mutates the live config."""
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.post(
+        "/api/config",
+        data=_config_form(channels_to_parse="a,b", include_nebula_first="true"),
+    )
+    assert resp.status_code == 200
+    assert "saved" in resp.text.lower()
+    assert config.nebula_filters.channels_to_parse == ["a", "b"]
+    assert config.nebula_filters.include_nebula_first is True
+
+
+def test_post_config_invalid_returns_400(config, fake_auth):
+    """POST /api/config with a bad value re-renders the form with an error."""
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.post(
+        "/api/config", data=_config_form(check_interval_hours="not-a-number")
+    )
+    assert resp.status_code == 400
+    assert "✗" in resp.text
+
+
+def test_post_config_reschedules_on_interval_change(config, fake_auth):
+    """Changing check_interval_hours reschedules the running scheduler."""
+    from unittest.mock import Mock
+
+    app = create_app(config, fake_auth, start_background=False)
+    app.state.scheduler = Mock()
+    client = TestClient(app)
+    resp = client.post("/api/config", data=_config_form(check_interval_hours="7"))
+    assert resp.status_code == 200
+    app.state.scheduler.reschedule.assert_called_once_with(7)
+
+
+def test_post_config_db_path_change_requires_restart(config, fake_auth, monkeypatch):
+    """Changing db_path persists the pointer and flags a restart."""
+    from config import config as config_module
+
+    monkeypatch.setattr(config_module, "set_db_path", lambda *a, **k: None)
+    client = TestClient(create_app(config, fake_auth, start_background=False))
+    resp = client.post(
+        "/api/config", data=_config_form(db_path="/tmp/moved/nebula.db")
+    )
+    assert resp.status_code == 200
+    assert "restart" in resp.text.lower()
