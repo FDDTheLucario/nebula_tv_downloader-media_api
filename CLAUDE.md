@@ -22,7 +22,8 @@ pipenv run pytest tests/utils/test_db.py::test_name # single test
 pipenv run coverage run -m pytest && pipenv run coverage report  # coverage
 pipenv run ruff check src tests      # lint
 pipenv run ruff format src tests     # format
-cd src && pipenv run python main.py  # run the archiver (reads config/config.ini)
+cd src && pipenv run python main.py  # run the archiver once (CLI / cron style)
+cd src && pipenv run python serve.py # run the web UI + background worker/scheduler (uvicorn)
 ```
 
 `pytest.ini` sets `pythonpath = src . tests`, so tests import app modules as `from config...`,
@@ -37,6 +38,22 @@ the INI into validated Pydantic models (`src/models/configuration.py`) and expos
 `nebula_api` / `nebula_filters` / `downloader` property groups. `QuotedConfigParser` strips
 surrounding quotes; the string `"false"` is the disabled sentinel for `category_search`, and an
 empty `channels_to_parse` disables the channel allow-list.
+
+The **web layer** (`serve.py`) does not read the INI at runtime: config lives in a single global
+SQLite DB and is edited via the UI. The INI is a one-time migration seed only. The DB location is
+the one bootstrap setting that can't live in the DB — resolved by `src/utils/paths.py` in priority
+order: `NEBULA_DB_PATH` env → pointer file `~/.config/nebula_archiver/db_path` → XDG default
+`~/.local/share/nebula_archiver/nebula.db`. The DB normally lives at `<download_path>/nebula.db`.
+
+## Deployment
+
+`Dockerfile` (repo root) containerizes the web service for 24/7 running: `python:3.14-slim` +
+`ffmpeg` (yt-dlp merges `bestvideo+bestaudio`) + `curl` (healthcheck), deps via
+`pipenv install --system --deploy`, `CMD ["python", "serve.py"]` from `/app/src`. `serve.py`'s
+`main()` binds `0.0.0.0:$PORT` (`PORT` env, default 8000) — set `PORT` to avoid a clash when the
+container shares another container's network namespace. Mount a host dir for the media library +
+DB and point `NEBULA_DB_PATH` at the DB inside it; `download_path` (stored in the DB config) must
+be the container-side path, not a host path. `GET /healthz` is the container healthcheck endpoint.
 
 ## Architecture
 
@@ -68,17 +85,25 @@ short-lived bearer token at construction. `main()` refreshes it mid-run every
 `token_refresh_interval_hours` (default 6) during the download loop. Pass `full=True` to
 `get_authorization_header()` to get the `Bearer <token>` form the content API expects.
 
-**Per-channel flow in `main()`:** resolve channels (config allow-list or
-`get_all_channels_slugs_from_video_feed`) → fetch episodes (live API, or from local DB when
-`load_channel_data_from_db`) → `filter_out_episodes` → persist via `save_channel_info` →
-`create_directory_structure_for_channel` (channel/season dirs, banner/avatar/poster art, channel
-`.nfo`) → `remove_downloaded_episodes_from_results` (skip if `<slug>.nfo` already exists — the
-`.nfo` is the "downloaded" marker) → `download_episode` per remaining episode (thumbnail →
-streaming manifest via yt-dlp → subtitles → video `.nfo`).
+**Per-channel flow in `main()`** (one channel per iteration):
 
-**Output layout:** `<download_path>/<channel_slug>/<Season YYYY | Specials>/<episode_slug>/` —
-Nebula Originals go to `Specials`, everything else to `Season <publication_year>`. Channel +
-episode metadata lives in `<download_path>/nebula.db` (SQLite), not per-channel JSON files.
+1. Resolve channels from the config allow-list, else `get_all_channels_slugs_from_video_feed`.
+2. Fetch episodes from the live API, or from the local DB when `load_channel_data_from_db`.
+3. `filter_out_episodes` to apply the attribute filters.
+4. `save_channel_info` to persist channel + episode set in one transaction.
+5. `create_directory_structure_for_channel` to make channel/season dirs, art, and channel `.nfo`.
+6. `remove_downloaded_episodes_from_results` to skip episodes whose `<slug>.nfo` already exists.
+7. `download_episode` per remaining episode: thumbnail → yt-dlp streaming manifest → subtitles → video `.nfo`.
+
+The per-episode `<slug>.nfo` is the "downloaded" marker (step 6) — no `.nfo`, it re-downloads.
+
+**Output layout:** `<download_path>/<channel_slug>/<season-dir>/<episode_slug>/`. Channel + episode
+metadata lives in `<download_path>/nebula.db` (SQLite), not per-channel JSON files. Season dir:
+
+| Season dir | When (`main.py:99`) |
+|---|---|
+| `Specials` | `IS_NEBULA_ORIGINAL` in `episode.attributes` |
+| `Season <YYYY>` | otherwise; `<YYYY>` = year of `episode.published_at` |
 
 ## Conventions
 
